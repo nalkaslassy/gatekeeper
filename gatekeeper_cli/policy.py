@@ -28,10 +28,17 @@ fail_on: high
 new_findings_only: true
 
 analyzers:
-  ruff:     { enabled: true }    # Python lint
-  bandit:   { enabled: true }    # Python SAST
-  gitleaks: { enabled: true, required: false }  # secret scan (skipped if binary absent)
-  lockfile: { enabled: true }    # dependency & supply-chain checks (no network)
+  ruff:      { enabled: true }    # Python lint
+  bandit:    { enabled: true }    # Python SAST
+  gitleaks:  { enabled: true, required: false }  # secret scan (skipped if binary absent)
+  lockfile:  { enabled: true }    # dependency & supply-chain checks (no network)
+  typosquat: { enabled: true }    # offline heuristic vs a bundled popular-package list
+
+  # Opt-in: known-vulnerability + known-malicious-package lookup via OSV.dev.
+  # Disabled by default because, unlike every other analyzer here, it makes
+  # network calls. required: false is recommended so an OSV.dev outage or a
+  # network-restricted CI runner doesn't fail the scan closed.
+  osv:       { enabled: false, required: false }
 
 supply_chain:
   # Missing lockfile for a detected manifest is a finding at this severity.
@@ -41,9 +48,19 @@ supply_chain:
   install_scripts: warn
   # Unpinned version specifiers in requirements.txt (no '==') are a finding.
   unpinned_python_deps: medium
+  # A declared dependency within edit-distance 1-2 of a well-known package
+  # name (bundled static list, no network) is a finding at this severity.
+  typosquat: high
 """
 
 VALID_INSTALL_SCRIPT_MODES = {"allow", "warn", "block"}
+
+# Analyzers that must be explicitly enabled in gatekeeper.yaml even though
+# no `analyzers:` entry is present at all. Currently just `osv`: it's the
+# only analyzer that makes network calls, so a policy file written before
+# it existed (or one that simply doesn't mention it) must not silently
+# start phoning home to OSV.dev after an upgrade.
+DEFAULT_DISABLED_ANALYZERS = {"osv"}
 
 
 @dataclass
@@ -54,12 +71,13 @@ class Policy:
     require_lockfile: Severity | None = Severity.HIGH
     install_scripts: str = "warn"
     unpinned_python_deps: Severity | None = Severity.MEDIUM
+    typosquat: Severity | None = Severity.HIGH
     source_path: Path | None = None
 
     def analyzer_enabled(self, name: str) -> bool:
         cfg = self.analyzers.get(name)
         if cfg is None:
-            return True  # analyzers default to enabled
+            return name not in DEFAULT_DISABLED_ANALYZERS
         return bool(cfg.get("enabled", True))
 
     def analyzer_required(self, name: str) -> bool:
@@ -110,5 +128,6 @@ def load_policy(repo_path: Path, explicit: Path | None = None) -> Policy:
         unpinned_python_deps=_sev_or_none(
             sc.get("unpinned_python_deps"), Severity.MEDIUM
         ),
+        typosquat=_sev_or_none(sc.get("typosquat"), Severity.HIGH),
         source_path=path,
     )

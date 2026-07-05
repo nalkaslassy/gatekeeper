@@ -36,7 +36,7 @@ class Severity(IntEnum):
 
 @dataclass
 class Finding:
-    category: str          # lint | sast | secret | supply_chain | error
+    category: str          # lint | sast | secret | supply_chain | vuln | error
     rule_id: str           # e.g. "ruff:E501", "bandit:B602", "gk:npm-install-script"
     severity: Severity
     title: str

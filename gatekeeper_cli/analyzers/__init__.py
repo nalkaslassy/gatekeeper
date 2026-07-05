@@ -11,12 +11,17 @@ Design rules:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
+import yaml
+
 from ..models import AnalyzerResult, Finding, Severity
 from ..policy import Policy
+from .osv import run_osv
+from .typosquat import run_typosquat
 
 ANALYZER_TIMEOUT_SECONDS = 300
 
@@ -154,35 +159,85 @@ def run_gitleaks(repo: Path, policy: Policy) -> AnalyzerResult:
 # lockfile — pure-Python dependency & supply-chain checks (no network)
 # --------------------------------------------------------------------------
 
+_PNPM_KEY_RE = re.compile(r"^/?(?P<name>@[^/@]+/[^@]+|[^@]+)@(?P<version>[^()]+)")
+
+
+def _parse_pnpm_key(key: str) -> tuple[str, str] | None:
+    m = _PNPM_KEY_RE.match(key)
+    if not m:
+        return None
+    return m.group("name"), m.group("version")
+
+
+def _pnpm_install_script_packages(repo: Path) -> list[tuple[str, str]]:
+    """Best-effort: pnpm's lockfile schema has changed across pnpm versions
+    (v6 keeps per-package metadata under `packages:`; v9 splits it between
+    `packages:` and `snapshots:`). Check both known locations for the
+    `requiresBuild` flag pnpm sets on packages with install/build scripts.
+    """
+    path = repo / "pnpm-lock.yaml"
+    if not path.exists():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except (yaml.YAMLError, OSError):
+        return []
+    if not isinstance(data, dict):
+        return []
+
+    seen: set[tuple[str, str]] = set()
+    out: list[tuple[str, str]] = []
+    for section in ("packages", "snapshots"):
+        for key, meta in (data.get(section) or {}).items():
+            if not isinstance(meta, dict) or not meta.get("requiresBuild"):
+                continue
+            parsed = _parse_pnpm_key(key)
+            if parsed and parsed not in seen:
+                seen.add(parsed)
+                out.append(parsed)
+    return out
+
+
 def run_lockfile(repo: Path, policy: Policy) -> AnalyzerResult:
     """Static supply-chain checks that require zero network and zero execution.
 
-    - package.json without package-lock.json  -> missing-lockfile finding
-    - lockfile entries declaring install scripts (npm records hasInstallScript)
+    - package.json without any lockfile           -> missing-lockfile finding
+    - package-lock.json / pnpm-lock.yaml entries declaring install scripts
+      (npm records `hasInstallScript`; pnpm records `requiresBuild`)
     - requirements.txt lines without exact pins ('==')
+
+    yarn.lock satisfies the missing-lockfile check but, unlike npm/pnpm,
+    classic yarn.lock carries no install-script metadata at all — detecting
+    install scripts for yarn-only projects would require a registry lookup
+    (network), which this analyzer deliberately does not do. Use the
+    (opt-in, networked) `osv` analyzer if you need coverage there.
     """
     name = "lockfile"
     findings: list[Finding] = []
 
     pkg_json = repo / "package.json"
-    lock = repo / "package-lock.json"
+    npm_lock = repo / "package-lock.json"
+    yarn_lock = repo / "yarn.lock"
+    pnpm_lock = repo / "pnpm-lock.yaml"
+    has_any_lock = npm_lock.exists() or yarn_lock.exists() or pnpm_lock.exists()
 
-    if pkg_json.exists() and not lock.exists() and policy.require_lockfile:
+    if pkg_json.exists() and not has_any_lock and policy.require_lockfile:
         findings.append(
             Finding(
                 category="supply_chain",
                 rule_id="gk:npm-missing-lockfile",
                 severity=policy.require_lockfile,
-                title="package.json present but no package-lock.json — "
+                title="package.json present but no lockfile "
+                      "(package-lock.json / yarn.lock / pnpm-lock.yaml) — "
                       "installs are not reproducible or integrity-verifiable",
                 file_path="package.json",
                 analyzer=name,
             )
         )
 
-    if lock.exists() and policy.install_scripts != "allow":
+    if npm_lock.exists() and policy.install_scripts != "allow":
         try:
-            data = json.loads(lock.read_text())
+            data = json.loads(npm_lock.read_text())
         except (json.JSONDecodeError, OSError) as exc:
             return AnalyzerResult(name, ok=False, findings=findings, error=str(exc))
         sev = Severity.HIGH if policy.install_scripts == "block" else Severity.MEDIUM
@@ -192,6 +247,7 @@ def run_lockfile(repo: Path, policy: Policy) -> AnalyzerResult:
                 continue
             if meta.get("hasInstallScript"):
                 pkg_name = pkg_path.split("node_modules/")[-1]
+                version = meta.get("version", "?")
                 findings.append(
                     Finding(
                         category="supply_chain",
@@ -200,12 +256,36 @@ def run_lockfile(repo: Path, policy: Policy) -> AnalyzerResult:
                         title=f"Dependency '{pkg_name}' declares lifecycle "
                               f"install scripts (runs code at install time)",
                         file_path="package-lock.json",
-                        detail={"package": pkg_name,
-                                "version": meta.get("version", "?"),
-                                "context": pkg_name},
+                        detail={
+                            "package": pkg_name,
+                            "version": version,
+                            # Version is deliberately part of the fingerprint:
+                            # if this package is compromised in-place (same
+                            # name, bumped version, still hasInstallScript),
+                            # it must resurface as a NEW finding even though
+                            # an earlier version was already baselined.
+                            "context": f"{pkg_name}@{version}",
+                        },
                         analyzer=name,
                     )
                 )
+
+    if pnpm_lock.exists() and policy.install_scripts != "allow":
+        sev = Severity.HIGH if policy.install_scripts == "block" else Severity.MEDIUM
+        for pkg_name, version in _pnpm_install_script_packages(repo):
+            findings.append(
+                Finding(
+                    category="supply_chain",
+                    rule_id="gk:npm-install-script",
+                    severity=sev,
+                    title=f"Dependency '{pkg_name}' declares lifecycle "
+                          f"install scripts (runs code at install time)",
+                    file_path="pnpm-lock.yaml",
+                    detail={"package": pkg_name, "version": version,
+                            "context": f"{pkg_name}@{version}"},
+                    analyzer=name,
+                )
+            )
 
     req = repo / "requirements.txt"
     if req.exists() and policy.unpinned_python_deps:
@@ -249,4 +329,6 @@ ALL_ANALYZERS = {
     "bandit": run_bandit,
     "gitleaks": run_gitleaks,
     "lockfile": run_lockfile,
+    "typosquat": run_typosquat,
+    "osv": run_osv,
 }

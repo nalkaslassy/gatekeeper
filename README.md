@@ -5,8 +5,12 @@ Validate code for correctness, quality, and supply-chain security — before it 
 Gatekeeper runs lint, SAST, secret scanning, and dependency/lockfile analysis
 against your repo, compares results to a committed baseline, and fails only on
 **new** findings above your policy threshold. Supply-chain checks (missing
-lockfiles, npm install scripts, unpinned dependencies) run from pure static
-parsing — no network, no code execution.
+lockfiles across npm/yarn/pnpm, install scripts, unpinned dependencies,
+typosquat package names) run from pure static parsing — no network, no code
+execution. An opt-in `osv` analyzer adds known-CVE and known-malicious-package
+lookup via OSV.dev for repos willing to trade that one static-first guarantee
+for broader coverage. See [Supply-chain coverage](#supply-chain-coverage) for
+exactly what is and isn't caught.
 
 ## Quickstart (60 seconds)
 
@@ -54,18 +58,41 @@ fail_on: high              # min severity of a NEW finding that blocks
 new_findings_only: true
 
 analyzers:
-  ruff:     { enabled: true }
-  bandit:   { enabled: true }
-  gitleaks: { enabled: true, required: false }
-  lockfile: { enabled: true }
+  ruff:      { enabled: true }
+  bandit:    { enabled: true }
+  gitleaks:  { enabled: true, required: false }
+  lockfile:  { enabled: true }
+  typosquat: { enabled: true }
+  osv:       { enabled: false, required: false }  # opt-in, makes network calls
 
 supply_chain:
-  require_lockfile: high       # package.json without package-lock.json
+  require_lockfile: high       # manifest with no lockfile at all
   install_scripts: warn        # allow | warn | block
   unpinned_python_deps: medium # requirements.txt entries without '=='
+  typosquat: high              # bundled popular-package list, no network
 ```
 
 Policy lives in the repo, so loosening it is itself a reviewable diff.
+
+## Supply-chain coverage
+
+What's covered today, and what still requires a human or a heavier tool:
+
+| Signal | Analyzer | Network? | Covered? |
+|---|---|---|---|
+| Missing lockfile (npm/yarn/pnpm) | `lockfile` | no | ✅ |
+| Install/postinstall scripts in `package-lock.json` | `lockfile` | no | ✅ |
+| Install/build scripts in `pnpm-lock.yaml` (`requiresBuild`) | `lockfile` | no | ✅ (best-effort — pnpm's lockfile schema has shifted across versions) |
+| Install scripts in `yarn.lock`-only projects | — | — | ❌ classic `yarn.lock` carries no script metadata at all; detecting it needs a registry lookup, which this analyzer deliberately doesn't do |
+| Unpinned `requirements.txt` entries | `lockfile` | no | ✅ |
+| Typosquat package names (`expres` vs `express`) | `typosquat` | no | ✅ edit-distance ≤2 against a bundled, curated (not download-ranked) list — expect false negatives for anything not on the list, and treat hits as "look closer," not proof |
+| Known CVEs/advisories for pinned versions | `osv` (opt-in) | **yes**, OSV.dev | ✅ when enabled |
+| Known-malicious package versions | `osv` (opt-in) | **yes**, OSV.dev | ✅ when enabled — OSV ingests the OpenSSF malicious-packages feed as `MAL-*` advisories |
+| Dependency confusion (internal name resolvable on public registry) | — | — | ❌ not built |
+| Runtime/dynamic analysis of install scripts (sandboxed execution) | — | — | ❌ roadmap only, see below — this is a real isolation/infra project (container runtime, syscall monitoring), not something bolted on statically |
+| In-place compromise of an *already-baselined* dependency | `lockfile` | no | ✅ partial — the install-script finding's fingerprint includes the version, so a version bump resurfaces for review even if an older version was already accepted. This only fires when `hasInstallScript`/`requiresBuild` is the signal; a compromise that doesn't touch that flag (e.g. malicious code with no new lifecycle script) won't be caught by static lockfile parsing — `osv` may catch it if the compromised version gets a published advisory |
+
+`osv` is opt-in and off by default specifically because it's the only analyzer here that leaves the machine: enable it with `analyzers: { osv: { enabled: true, required: false } }`. `required: false` is recommended so an OSV.dev outage doesn't fail CI closed for a best-effort network check.
 
 ## Design principles
 
@@ -73,6 +100,8 @@ Policy lives in the repo, so loosening it is itself a reviewable diff.
 - **Structured output only.** Analyzers are parsed from JSON, never scraped.
 - **Static-first supply chain.** Lockfile checks execute nothing and need no
   network; reading `package-lock.json` is safe, running `npm install` is not.
+  The one documented exception is the opt-in `osv` analyzer, which is
+  disabled by default precisely because it breaks this rule.
 - **Baseline, don't bankrupt.** Legacy debt is recorded and visible; only
   regressions block.
 - **Minimal, pinned dependencies.** Three runtime deps (typer, rich, pyyaml);
@@ -81,7 +110,8 @@ Policy lives in the repo, so loosening it is itself a reviewable diff.
 ## Roadmap
 
 Server mode with sandboxed test execution (rootless Docker → gVisor →
-Firecracker path), OSV vulnerability lookup, typosquat and dependency-confusion
+Firecracker path) — a real isolation/infra project, intentionally not
+attempted as a bolt-on to the static analyzers — plus dependency-confusion
 detection, SBOM generation, Verdaccio registry mirroring with `npm ci
 --ignore-scripts`, and an MCP server so agents can query scan results.
 See `docs/design.md` for the full architecture.
