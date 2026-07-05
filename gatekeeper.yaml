@@ -1,0 +1,24 @@
+# Gatekeeper policy — versioned with your code, reviewable in PRs.
+version: 1
+
+# Minimum severity of a NEW finding that fails the scan.
+# One of: info | low | medium | high | critical
+fail_on: high
+
+# Fail only on findings not present in the baseline (see `gatekeeper baseline`).
+new_findings_only: true
+
+analyzers:
+  ruff:     { enabled: true }    # Python lint
+  bandit:   { enabled: true }    # Python SAST
+  gitleaks: { enabled: true, required: false }  # secret scan (skipped if binary absent)
+  lockfile: { enabled: true }    # dependency & supply-chain checks (no network)
+
+supply_chain:
+  # Missing lockfile for a detected manifest is a finding at this severity.
+  require_lockfile: high
+  # npm packages whose lockfile entry declares install scripts:
+  # allow | warn | block   (block => high-severity finding)
+  install_scripts: warn
+  # Unpinned version specifiers in requirements.txt (no '==') are a finding.
+  unpinned_python_deps: medium

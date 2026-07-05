@@ -1,0 +1,33 @@
+# .github/workflows/gatekeeper.yml — what a user adds to their repo.
+name: Gatekeeper
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least-privilege token: read code, write security events for SARIF upload.
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  gatekeeper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so secret scanning covers past commits
+
+      - name: Gatekeeper scan
+        id: gatekeeper
+        uses: OWNER/gatekeeper-action@v0   # pin to a tag or commit SHA
+        with:
+          fail-on: high
+
+      # Findings appear in the repo's Security > Code scanning tab.
+      - name: Upload SARIF
+        if: always() && steps.gatekeeper.outputs.sarif-file != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.gatekeeper.outputs.sarif-file }}

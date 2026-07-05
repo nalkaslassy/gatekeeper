@@ -1,0 +1,77 @@
+name: "Gatekeeper Scan"
+description: >
+  Validate code for correctness, quality, and supply-chain security.
+  Runs lint, SAST, secret scanning, and dependency/lockfile checks, and
+  fails the check when new findings exceed your policy threshold.
+author: "Nadav"
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  path:
+    description: "Directory to scan"
+    default: "."
+  policy:
+    description: "Path to gatekeeper.yaml (defaults to <path>/gatekeeper.yaml)"
+    default: ""
+  fail-on:
+    description: "Override policy threshold: info|low|medium|high|critical"
+    default: ""
+  version:
+    description: "gatekeeper-cli version to install (pin this in production)"
+    default: "0.1.0"
+  sarif:
+    description: "Also emit results.sarif for GitHub code scanning upload"
+    default: "true"
+
+outputs:
+  verdict:
+    description: "passed or failed"
+    value: ${{ steps.scan.outputs.verdict }}
+  sarif-file:
+    description: "Path to the SARIF report (when sarif: true)"
+    value: ${{ steps.scan.outputs.sarif_file }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install Gatekeeper (pinned)
+      shell: bash
+      run: |
+        # Pinned version + hash-verifiable install path. pipx isolates the
+        # tool's own dependencies from the scanned project's environment.
+        pipx install "gatekeeper-cli[analyzers]==${{ inputs.version }}"
+
+    - name: Run scan
+      id: scan
+      shell: bash
+      run: |
+        set +e
+        ARGS=("${{ inputs.path }}")
+        [ -n "${{ inputs.policy }}" ]  && ARGS+=(--policy "${{ inputs.policy }}")
+        [ -n "${{ inputs.fail-on }}" ] && ARGS+=(--fail-on "${{ inputs.fail-on }}")
+
+        # Human-readable report in the job log
+        gatekeeper scan "${ARGS[@]}"
+        CODE=$?
+
+        # Machine-readable SARIF for the Security tab
+        if [ "${{ inputs.sarif }}" = "true" ]; then
+          gatekeeper scan "${ARGS[@]}" --format sarif --output results.sarif || true
+          echo "sarif_file=results.sarif" >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ $CODE -eq 0 ]; then
+          echo "verdict=passed" >> "$GITHUB_OUTPUT"
+        elif [ $CODE -eq 1 ]; then
+          echo "verdict=failed" >> "$GITHUB_OUTPUT"
+        else
+          echo "verdict=error" >> "$GITHUB_OUTPUT"
+        fi
+        exit $CODE

@@ -1,0 +1,26 @@
+[project]
+name = "gatekeeper-cli"
+version = "0.1.0"
+description = "Validate code for correctness, quality, and supply-chain security before merge."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Nadav" }]
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+gatekeeper = "gatekeeper_cli.main:app"
+
+[project.optional-dependencies]
+analyzers = ["ruff>=0.4", "bandit>=1.7"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gatekeeper_cli*"]
