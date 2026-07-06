@@ -41,18 +41,30 @@ _DB_SEVERITY_MAP = {
 }
 
 
+def _require_https(url: str) -> None:
+    # Both URLs here are built from hardcoded https:// prefixes, so this
+    # can't actually fail today — it's a guard against a future edit
+    # accidentally turning a formatted-in value into a scheme change
+    # (e.g. a vuln id containing "file://"), which urlopen would otherwise
+    # follow without complaint.
+    if not url.startswith("https://"):
+        raise ValueError(f"refusing non-https URL: {url!r}")
+
+
 def _post_json(url: str, payload: dict) -> dict:
+    _require_https(url)
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         url, data=data, headers={"Content-Type": "application/json"}, method="POST"
     )
-    with urllib.request.urlopen(req, timeout=OSV_TIMEOUT_SECONDS) as resp:
+    with urllib.request.urlopen(req, timeout=OSV_TIMEOUT_SECONDS) as resp:  # nosec B310
         return json.loads(resp.read())
 
 
 def _get_json(url: str) -> dict:
+    _require_https(url)
     req = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(req, timeout=OSV_TIMEOUT_SECONDS) as resp:
+    with urllib.request.urlopen(req, timeout=OSV_TIMEOUT_SECONDS) as resp:  # nosec B310
         return json.loads(resp.read())
 
 

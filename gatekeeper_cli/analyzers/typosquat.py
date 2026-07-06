@@ -14,7 +14,7 @@ import json
 import re
 from pathlib import Path
 
-from ..models import AnalyzerResult, Finding, Severity
+from ..models import AnalyzerResult, Finding
 from ..policy import Policy
 from .popular_packages import POPULAR_NPM_PACKAGES, POPULAR_PYPI_PACKAGES
 

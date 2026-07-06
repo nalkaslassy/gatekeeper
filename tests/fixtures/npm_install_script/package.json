@@ -1,0 +1,6 @@
+{
+  "name": "install-script-fixture",
+  "dependencies": {
+    "shady-pkg": "^1.0.0"
+  }
+}

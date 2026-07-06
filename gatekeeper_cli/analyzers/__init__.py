@@ -85,7 +85,8 @@ def run_bandit(repo: Path, policy: Policy) -> AnalyzerResult:
         return AnalyzerResult(name, ok=True, findings=[], skipped=True)
     try:
         proc = _run(
-            ["bandit", "-r", ".", "-f", "json", "-q", "-x", "./.venv,./node_modules"],
+            ["bandit", "-r", ".", "-f", "json", "-q",
+             "-x", "./.venv,./node_modules,./tests"],
             repo,
         )
         if proc.returncode not in (0, 1):

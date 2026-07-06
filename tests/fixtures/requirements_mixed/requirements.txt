@@ -1,0 +1,8 @@
+# a comment line, ignored entirely
+numpy==1.26.0
+flask
+requests>=2.0  # unpinned range, should flag
+-r other.txt
+--index-url https://example.invalid/simple
+
+pandas==2.2.0  # pinned with trailing comment

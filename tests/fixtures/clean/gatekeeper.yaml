@@ -1,0 +1,11 @@
+version: 1
+fail_on: high
+new_findings_only: true
+
+analyzers:
+  ruff:      { enabled: false }
+  bandit:    { enabled: false }
+  gitleaks:  { enabled: false }
+  lockfile:  { enabled: true }
+  typosquat: { enabled: true }
+  osv:       { enabled: false }

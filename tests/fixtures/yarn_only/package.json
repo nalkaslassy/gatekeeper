@@ -1,0 +1,6 @@
+{
+  "name": "yarn-fixture",
+  "dependencies": {
+    "left-pad": "^1.3.0"
+  }
+}

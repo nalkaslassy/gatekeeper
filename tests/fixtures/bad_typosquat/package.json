@@ -1,0 +1,6 @@
+{
+  "name": "bad-fixture",
+  "dependencies": {
+    "expres": "^4.18.0"
+  }
+}

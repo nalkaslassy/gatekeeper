@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package (analyzers + dev extras)
+        run: pip install -e ".[analyzers,dev]"
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Dogfood — Gatekeeper scans itself
+        run: gatekeeper scan .
+
+      - name: Generate SARIF report
+        if: always()
+        # Re-running the scan only to emit results.sarif for upload; the
+        # pass/fail verdict was already enforced by the "Dogfood" step above,
+        # so a nonzero exit here (same findings, different format) must not
+        # separately fail the job.
+        continue-on-error: true
+        run: gatekeeper scan . --format sarif --output results.sarif
+
+      - name: Upload SARIF to code scanning
+        if: always() && matrix.python-version == '3.12'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif

@@ -161,7 +161,8 @@ def _print_text_report(result: dict) -> None:
     console.print(f"Policy: {result['policy']}   Fail on: {result['fail_on']}+ (new)")
 
     t = Table(show_header=True, header_style="bold")
-    t.add_column("Analyzer"); t.add_column("Status")
+    t.add_column("Analyzer")
+    t.add_column("Status")
     for a in result["analyzers"]:
         status = a["status"]
         if "findings" in a:

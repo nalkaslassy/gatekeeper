@@ -1,0 +1,6 @@
+{
+  "name": "missing-lockfile-fixture",
+  "dependencies": {
+    "left-pad": "^1.3.0"
+  }
+}
