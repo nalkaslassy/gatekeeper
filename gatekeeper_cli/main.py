@@ -28,6 +28,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from . import __version__
 from .models import Severity
 from .policy import POLICY_FILENAME, STARTER_POLICY, load_policy
 from .runner import run_scan, to_sarif, write_baseline
@@ -138,7 +139,7 @@ def policy_validate(
 @app.command()
 def version() -> None:
     """Print the Gatekeeper CLI version."""
-    console.print("gatekeeper-cli 0.1.0")
+    console.print(f"gatekeeper-cli {__version__}")
 
 
 # --------------------------------------------------------------------------

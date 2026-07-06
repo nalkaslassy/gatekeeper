@@ -43,13 +43,23 @@ def test_scan_sarif_format_has_valid_basic_shape(fixture_repo):
     assert "$schema" in data
     assert len(data["runs"]) == 1
     run = data["runs"][0]
-    assert run["tool"]["driver"]["name"] == "Gatekeeper"
+    driver = run["tool"]["driver"]
+    assert driver["name"] == "Gatekeeper"
+    assert driver["informationUri"] == "https://github.com/nalkaslassy/gatekeeper"
+    assert "version" in driver and driver["version"]
     assert isinstance(run["results"], list)
     assert len(run["results"]) > 0
     for entry in run["results"]:
         assert "ruleId" in entry
         assert "level" in entry
         assert "message" in entry and "text" in entry["message"]
+        assert "gatekeeperFingerprint/v1" in entry["partialFingerprints"]
+
+    rule_ids_in_results = {entry["ruleId"] for entry in run["results"]}
+    rule_ids_in_catalog = {rule["id"] for rule in driver["rules"]}
+    assert rule_ids_in_results <= rule_ids_in_catalog
+    for rule in driver["rules"]:
+        assert "shortDescription" in rule and rule["shortDescription"]["text"]
 
 
 def test_scan_fail_on_override(fixture_repo):

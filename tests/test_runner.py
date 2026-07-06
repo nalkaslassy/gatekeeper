@@ -89,6 +89,30 @@ def test_disabled_analyzer_is_skipped_entirely(tmp_path):
     assert meta["status"] == "disabled"
 
 
+def test_analyzer_meta_and_findings_ordered_by_analyzer_name(fixture_repo):
+    repo = fixture_repo("bad_typosquat")
+    pol = Policy(analyzers={
+        "ruff": {"enabled": False}, "bandit": {"enabled": False},
+        "gitleaks": {"enabled": False},
+    })
+    result = run_scan(repo, pol, only=["lockfile", "typosquat"])
+    names = [a["analyzer"] for a in result["analyzers"]]
+    assert names == sorted(names)
+    finding_analyzers = [f["analyzer"] for f in result["findings"]]
+    assert finding_analyzers == sorted(finding_analyzers)
+
+
+def test_run_scan_is_deterministic_across_repeated_runs(fixture_repo):
+    repo = fixture_repo("bad_typosquat")
+    pol = Policy()
+    first = run_scan(repo, pol)
+    second = run_scan(repo, pol)
+    assert [a["analyzer"] for a in first["analyzers"]] == \
+           [a["analyzer"] for a in second["analyzers"]]
+    assert [f["fingerprint"] for f in first["findings"]] == \
+           [f["fingerprint"] for f in second["findings"]]
+
+
 def test_only_filter_restricts_analyzers(tmp_path):
     result = run_scan(tmp_path, Policy(), only=["lockfile"])
     names = {a["analyzer"] for a in result["analyzers"]}
