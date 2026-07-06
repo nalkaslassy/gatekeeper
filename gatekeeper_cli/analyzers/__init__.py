@@ -14,6 +14,7 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -21,6 +22,13 @@ import yaml
 from ..models import AnalyzerResult, Finding, Severity
 from ..policy import Policy
 from .osv import run_osv
+from .python_manifests import (
+    normalize_pypi_name,
+    parse_pyproject_dependencies,
+    pep508_name,
+    requirement_line_name,
+    resolved_versions,
+)
 from .typosquat import run_typosquat
 
 ANALYZER_TIMEOUT_SECONDS = 300
@@ -121,23 +129,26 @@ def run_gitleaks(repo: Path, policy: Policy) -> AnalyzerResult:
     name = "gitleaks"
     if shutil.which("gitleaks") is None:
         return AnalyzerResult(name, ok=True, findings=[], skipped=True)
-    report = repo / ".gatekeeper-gitleaks.json"
     try:
-        proc = _run(
-            [
-                "gitleaks", "detect", "--source", ".", "--no-banner",
-                "--report-format", "json", "--report-path", str(report),
-            ],
-            repo,
-        )
-        # gitleaks exits 1 when leaks are found; not a tool failure.
-        if proc.returncode not in (0, 1):
-            return AnalyzerResult(name, ok=False, findings=[], error=proc.stderr[-2000:])
-        items = json.loads(report.read_text() or "[]") if report.exists() else []
+        # The report is written outside the scanned repo entirely — never
+        # into the untrusted tree itself, and automatically cleaned up
+        # (including on a crash/timeout) rather than relying on a
+        # try/finally unlink that a hard kill could skip.
+        with tempfile.TemporaryDirectory(prefix="gatekeeper-gitleaks-") as tmp_dir:
+            report = Path(tmp_dir) / "report.json"
+            proc = _run(
+                [
+                    "gitleaks", "detect", "--source", ".", "--no-banner",
+                    "--report-format", "json", "--report-path", str(report),
+                ],
+                repo,
+            )
+            # gitleaks exits 1 when leaks are found; not a tool failure.
+            if proc.returncode not in (0, 1):
+                return AnalyzerResult(name, ok=False, findings=[], error=proc.stderr[-2000:])
+            items = json.loads(report.read_text() or "[]") if report.exists() else []
     except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as exc:
         return AnalyzerResult(name, ok=False, findings=[], error=str(exc))
-    finally:
-        report.unlink(missing_ok=True)
 
     findings = [
         Finding(
@@ -236,40 +247,63 @@ def run_lockfile(repo: Path, policy: Policy) -> AnalyzerResult:
             )
         )
 
-    if npm_lock.exists() and policy.install_scripts != "allow":
+    if npm_lock.exists():
         try:
             data = json.loads(npm_lock.read_text())
         except (json.JSONDecodeError, OSError) as exc:
             return AnalyzerResult(name, ok=False, findings=findings, error=str(exc))
-        sev = Severity.HIGH if policy.install_scripts == "block" else Severity.MEDIUM
-        packages = data.get("packages", {})  # lockfile v2/v3
-        for pkg_path, meta in packages.items():
-            if not pkg_path or not isinstance(meta, dict):
-                continue
-            if meta.get("hasInstallScript"):
-                pkg_name = pkg_path.split("node_modules/")[-1]
-                version = meta.get("version", "?")
-                findings.append(
-                    Finding(
-                        category="supply_chain",
-                        rule_id="gk:npm-install-script",
-                        severity=sev,
-                        title=f"Dependency '{pkg_name}' declares lifecycle "
-                              f"install scripts (runs code at install time)",
-                        file_path="package-lock.json",
-                        detail={
-                            "package": pkg_name,
-                            "version": version,
-                            # Version is deliberately part of the fingerprint:
-                            # if this package is compromised in-place (same
-                            # name, bumped version, still hasInstallScript),
-                            # it must resurface as a NEW finding even though
-                            # an earlier version was already baselined.
-                            "context": f"{pkg_name}@{version}",
-                        },
-                        analyzer=name,
-                    )
+
+        if data.get("lockfileVersion") == 1:
+            # v1 (pre-npm-7) has no per-package "packages" map at all — just
+            # a nested "dependencies" tree with no hasInstallScript/integrity
+            # metadata. Every check below that relies on that metadata is
+            # silently blind on a v1 lockfile; surface that gap explicitly
+            # rather than let it look like a clean scan.
+            findings.append(
+                Finding(
+                    category="supply_chain",
+                    rule_id="gk:npm-lockfile-v1",
+                    severity=Severity.LOW,
+                    title="package-lock.json uses lockfileVersion 1, which lacks "
+                          "the per-package metadata (hasInstallScript, integrity) "
+                          "this analyzer relies on — upgrade to npm >=7 and "
+                          "regenerate the lockfile for full install-script coverage",
+                    file_path="package-lock.json",
+                    analyzer=name,
                 )
+            )
+
+        if policy.install_scripts != "allow":
+            sev = Severity.HIGH if policy.install_scripts == "block" else Severity.MEDIUM
+            packages = data.get("packages", {})  # lockfile v2/v3 only
+            for pkg_path, meta in packages.items():
+                if not pkg_path or not isinstance(meta, dict):
+                    continue
+                if meta.get("hasInstallScript"):
+                    pkg_name = pkg_path.split("node_modules/")[-1]
+                    version = meta.get("version", "?")
+                    findings.append(
+                        Finding(
+                            category="supply_chain",
+                            rule_id="gk:npm-install-script",
+                            severity=sev,
+                            title=f"Dependency '{pkg_name}' declares lifecycle "
+                                  f"install scripts (runs code at install time)",
+                            file_path="package-lock.json",
+                            detail={
+                                "package": pkg_name,
+                                "version": version,
+                                # Version is deliberately part of the
+                                # fingerprint: if this package is compromised
+                                # in-place (same name, bumped version, still
+                                # hasInstallScript), it must resurface as a
+                                # NEW finding even though an earlier version
+                                # was already baselined.
+                                "context": f"{pkg_name}@{version}",
+                            },
+                            analyzer=name,
+                        )
+                    )
 
     if pnpm_lock.exists() and policy.install_scripts != "allow":
         sev = Severity.HIGH if policy.install_scripts == "block" else Severity.MEDIUM
@@ -288,17 +322,27 @@ def run_lockfile(repo: Path, policy: Policy) -> AnalyzerResult:
                 )
             )
 
-    req = repo / "requirements.txt"
-    if req.exists() and policy.unpinned_python_deps:
-        try:
-            lines = req.read_text().splitlines()
-        except OSError as exc:
-            return AnalyzerResult(name, ok=False, findings=findings, error=str(exc))
-        for i, raw in enumerate(lines, start=1):
-            line = raw.split("#", 1)[0].strip()
-            if not line or line.startswith(("-", "--")):
-                continue
-            if "==" not in line and "@" not in line:
+    if policy.unpinned_python_deps:
+        # poetry.lock / uv.lock resolve a range specifier to one exact,
+        # reproducible version even though the manifest itself never pins
+        # it — that satisfies the same reproducibility goal an explicit
+        # '==' does, so deps resolved there must not also be flagged.
+        resolved = resolved_versions(repo)
+
+        req = repo / "requirements.txt"
+        if req.exists():
+            try:
+                lines = req.read_text().splitlines()
+            except OSError as exc:
+                return AnalyzerResult(name, ok=False, findings=findings, error=str(exc))
+            for i, raw in enumerate(lines, start=1):
+                line = raw.split("#", 1)[0].strip()
+                if not line or line.startswith(("-", "--")):
+                    continue
+                if "==" in line or "@" in line:
+                    continue
+                if normalize_pypi_name(requirement_line_name(line)) in resolved:
+                    continue
                 findings.append(
                     Finding(
                         category="supply_chain",
@@ -312,6 +356,26 @@ def run_lockfile(repo: Path, policy: Policy) -> AnalyzerResult:
                         analyzer=name,
                     )
                 )
+
+        for raw_spec in parse_pyproject_dependencies(repo):
+            spec_no_marker = raw_spec.split(";", 1)[0]
+            if "==" in spec_no_marker:
+                continue
+            if normalize_pypi_name(pep508_name(raw_spec)) in resolved:
+                continue
+            findings.append(
+                Finding(
+                    category="supply_chain",
+                    rule_id="gk:py-unpinned-dependency",
+                    severity=policy.unpinned_python_deps,
+                    title=f"Unpinned Python dependency '{raw_spec}' — pin exact "
+                          f"versions or add a poetry.lock/uv.lock for "
+                          f"reproducible installs",
+                    file_path="pyproject.toml",
+                    detail={"context": raw_spec},
+                    analyzer=name,
+                )
+            )
 
     return AnalyzerResult(name, ok=True, findings=findings)
 

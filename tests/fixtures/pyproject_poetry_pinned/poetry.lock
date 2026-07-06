@@ -1,0 +1,11 @@
+[[package]]
+name = "flask"
+version = "3.0.3"
+description = "A simple framework"
+category = "main"
+
+[[package]]
+name = "werkzeug"
+version = "3.0.1"
+description = "A WSGI utility library"
+category = "main"

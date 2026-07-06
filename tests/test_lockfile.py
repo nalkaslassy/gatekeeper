@@ -53,6 +53,26 @@ def test_pnpm_requires_build_detected(fixture_repo):
     assert all(f.detail["package"] != "left-pad" for f in findings)
 
 
+def test_npm_lockfile_v1_flagged_for_upgrade(fixture_repo):
+    repo = fixture_repo("npm_lockfile_v1")
+    result = run_lockfile(repo, Policy())
+    v1_findings = [f for f in result.findings if f.rule_id == "gk:npm-lockfile-v1"]
+    assert len(v1_findings) == 1
+    assert v1_findings[0].severity == Severity.LOW
+    assert v1_findings[0].file_path == "package-lock.json"
+    # v1 still satisfies "has a lockfile" — no missing-lockfile finding too
+    assert "gk:npm-missing-lockfile" not in _rule_ids(result.findings)
+
+
+def test_npm_lockfile_v1_does_not_crash_install_script_scan(fixture_repo):
+    repo = fixture_repo("npm_lockfile_v1")
+    # v1 has no "packages" map; the install-script scan must just find
+    # nothing there rather than erroring.
+    result = run_lockfile(repo, Policy(install_scripts="block"))
+    assert result.ok
+    assert "gk:npm-install-script" not in _rule_ids(result.findings)
+
+
 def test_install_scripts_allow_suppresses_finding(fixture_repo):
     repo = fixture_repo("npm_install_script")
     pol = Policy(install_scripts="allow")

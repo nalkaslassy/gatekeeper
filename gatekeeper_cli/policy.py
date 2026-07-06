@@ -51,6 +51,10 @@ supply_chain:
   # A declared dependency within edit-distance 1-2 of a well-known package
   # name (bundled static list, no network) is a finding at this severity.
   typosquat: high
+  # Known-good near-misses (deliberate forks, internal packages that
+  # legitimately resemble a popular name, etc.) — suppressed by exact name,
+  # reviewable in a diff instead of edited out of the analyzer itself.
+  typosquat_allow: []
 """
 
 VALID_INSTALL_SCRIPT_MODES = {"allow", "warn", "block"}
@@ -72,6 +76,7 @@ class Policy:
     install_scripts: str = "warn"
     unpinned_python_deps: Severity | None = Severity.MEDIUM
     typosquat: Severity | None = Severity.HIGH
+    typosquat_allow: frozenset[str] = field(default_factory=frozenset)
     source_path: Path | None = None
 
     def analyzer_enabled(self, name: str) -> bool:
@@ -129,5 +134,6 @@ def load_policy(repo_path: Path, explicit: Path | None = None) -> Policy:
             sc.get("unpinned_python_deps"), Severity.MEDIUM
         ),
         typosquat=_sev_or_none(sc.get("typosquat"), Severity.HIGH),
+        typosquat_allow=frozenset(str(x) for x in (sc.get("typosquat_allow") or [])),
         source_path=path,
     )

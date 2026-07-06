@@ -139,6 +139,98 @@ def test_malformed_lockfile_does_not_crash(tmp_path):
     assert result.findings == []
 
 
+def test_dedupes_duplicate_package_version_pairs(tmp_path, monkeypatch):
+    # Two different lockfile paths, same name@version (hoisting duplicate).
+    data = {
+        "name": "fixture",
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"name": "fixture"},
+            "node_modules/dup-pkg": {"version": "1.0.0"},
+            "node_modules/nested/node_modules/dup-pkg": {"version": "1.0.0"},
+        },
+    }
+    (tmp_path / "package-lock.json").write_text(json.dumps(data))
+
+    calls = []
+
+    def fake_post_json(url, payload):
+        calls.append(payload)
+        return {"results": [{"vulns": []} for _ in payload["queries"]]}
+
+    monkeypatch.setattr(osv_mod, "_post_json", fake_post_json)
+
+    result = osv_mod.run_osv(tmp_path, Policy())
+    assert result.ok
+    assert result.findings == []
+    total_queries = sum(len(c["queries"]) for c in calls)
+    assert total_queries == 1  # deduped: only one query sent for the pair
+
+
+def test_pagination_follows_next_page_token(tmp_path, monkeypatch):
+    _write_npm_lock(tmp_path, {"chatty-pkg": "1.0.0"})
+
+    call_count = {"n": 0}
+
+    def fake_post_json(url, payload):
+        call_count["n"] += 1
+        query = payload["queries"][0]
+        if "page_token" not in query:
+            return {"results": [{"vulns": [{"id": "GHSA-page-one"}],
+                                  "next_page_token": "tok-1"}]}
+        assert query["page_token"] == "tok-1"
+        return {"results": [{"vulns": [{"id": "GHSA-page-two"}]}]}
+
+    monkeypatch.setattr(osv_mod, "_post_json", fake_post_json)
+    monkeypatch.setattr(osv_mod, "_get_json", lambda url: {})
+
+    result = osv_mod.run_osv(tmp_path, Policy())
+    ids = {f.detail["osv_id"] for f in result.findings}
+    assert ids == {"GHSA-page-one", "GHSA-page-two"}
+    assert call_count["n"] == 2
+
+
+def test_pagination_bounded_and_survives_mid_pagination_failure(tmp_path, monkeypatch):
+    _write_npm_lock(tmp_path, {"chatty-pkg": "1.0.0"})
+
+    def fake_post_json(url, payload):
+        query = payload["queries"][0]
+        if "page_token" not in query:
+            return {"results": [{"vulns": [{"id": "GHSA-first-page"}],
+                                  "next_page_token": "tok-1"}]}
+        raise TimeoutError("second page unavailable")
+
+    monkeypatch.setattr(osv_mod, "_post_json", fake_post_json)
+    monkeypatch.setattr(osv_mod, "_get_json", lambda url: {})
+
+    result = osv_mod.run_osv(tmp_path, Policy())
+    # First page's data must survive even though the second page errored —
+    # this must NOT be treated as a fatal analyzer failure.
+    assert result.ok
+    ids = {f.detail["osv_id"] for f in result.findings}
+    assert ids == {"GHSA-first-page"}
+
+
+def test_detail_fetch_cap_still_reports_finding_without_detail(tmp_path, monkeypatch):
+    _write_npm_lock(tmp_path, {"some-pkg": "2.0.0"})
+    monkeypatch.setattr(osv_mod, "MAX_DETAIL_FETCHES", 0)
+    monkeypatch.setattr(
+        osv_mod, "_post_json",
+        lambda url, payload: {"results": [{"vulns": [{"id": "GHSA-uncapped"}]}]},
+    )
+
+    def fail_if_called(url):
+        raise AssertionError("detail fetch should not run past the cap")
+
+    monkeypatch.setattr(osv_mod, "_get_json", fail_if_called)
+
+    result = osv_mod.run_osv(tmp_path, Policy())
+    assert result.ok
+    assert len(result.findings) == 1
+    assert result.findings[0].severity == Severity.HIGH  # degraded default
+    assert result.findings[0].detail["osv_id"] == "GHSA-uncapped"
+
+
 def test_detail_fetch_error_degrades_gracefully(tmp_path, monkeypatch):
     _write_npm_lock(tmp_path, {"some-pkg": "2.0.0"})
 

@@ -98,6 +98,19 @@ def test_require_lockfile_can_be_disabled(tmp_path):
     assert pol.require_lockfile is None
 
 
+def test_typosquat_allow_defaults_empty(tmp_path):
+    pol = load_policy(tmp_path)
+    assert pol.typosquat_allow == frozenset()
+
+
+def test_typosquat_allow_parses_list(tmp_path):
+    (tmp_path / POLICY_FILENAME).write_text(
+        "version: 1\nsupply_chain:\n  typosquat_allow: [expres, reqeusts]\n"
+    )
+    pol = load_policy(tmp_path)
+    assert pol.typosquat_allow == frozenset({"expres", "reqeusts"})
+
+
 def test_analyzer_required_defaults_true(tmp_path):
     pol = Policy()
     assert pol.analyzer_required("ruff") is True
