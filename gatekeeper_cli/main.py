@@ -32,6 +32,7 @@ from . import __version__
 from .models import Severity
 from .policy import POLICY_FILENAME, STARTER_POLICY, load_policy
 from .runner import run_scan, to_sarif, write_baseline
+from .sbom import generate_sbom
 
 app = typer.Typer(add_completion=False, no_args_is_help=True,
                   help="Validate code for correctness, quality, and supply-chain security.")
@@ -133,6 +134,20 @@ def policy_validate(
         f"[green]Policy OK[/green] — fail_on={pol.fail_on}, "
         f"install_scripts={pol.install_scripts}, "
         f"analyzers={{{', '.join(pol.analyzers) or 'defaults'}}}"
+    )
+
+
+@app.command()
+def sbom(
+    path: Path = typer.Argument(Path("."), exists=True, file_okay=False),
+    output: Path = typer.Option(Path("bom.cdx.json"), "--output", "-o"),
+) -> None:
+    """Generate a static CycloneDX 1.6 SBOM from supported manifests/lockfiles."""
+    doc = generate_sbom(path.resolve())
+    output.write_text(json.dumps(doc, indent=2) + "\n")
+    console.print(
+        f"Wrote CycloneDX SBOM to [bold]{output}[/bold] "
+        f"({len(doc['components'])} component(s))."
     )
 
 
