@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Any
 
 import yaml
@@ -66,6 +67,10 @@ supply_chain:
 """
 
 VALID_INSTALL_SCRIPT_MODES = {"allow", "warn", "block"}
+
+
+def _normalize_pypi_name(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name.lower())
 
 # Analyzers that must be explicitly enabled in gatekeeper.yaml even though
 # no `analyzers:` entry is present at all. Currently just `osv`: it's the
@@ -156,10 +161,8 @@ def load_policy(repo_path: Path, explicit: Path | None = None) -> Policy:
             str(x) for x in (sc.get("internal_npm_packages") or [])
         ),
         internal_pypi_packages=frozenset(
-            normalize for normalize in (
-                str(x).lower().replace("_", "-").replace(".", "-")
-                for x in (sc.get("internal_pypi_packages") or [])
-            )
+            _normalize_pypi_name(str(x))
+            for x in (sc.get("internal_pypi_packages") or [])
         ),
         typosquat_allow=frozenset(str(x) for x in (sc.get("typosquat_allow") or [])),
         source_path=path,
