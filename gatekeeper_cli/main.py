@@ -33,11 +33,19 @@ from .models import Severity
 from .policy import POLICY_FILENAME, STARTER_POLICY, load_policy
 from .runner import run_scan, to_sarif, write_baseline
 from .sbom import generate_sbom
+from .trust import (
+    TRUST_FILENAME,
+    build_trust_snapshot,
+    compare_repo_to_baseline,
+    write_trust_snapshot,
+)
 
 app = typer.Typer(add_completion=False, no_args_is_help=True,
                   help="Validate code for correctness, quality, and supply-chain security.")
 policy_app = typer.Typer(help="Manage the gatekeeper.yaml policy file.")
+trust_app = typer.Typer(help="Record and review dependency trust drift.")
 app.add_typer(policy_app, name="policy")
+app.add_typer(trust_app, name="trust")
 
 console = Console(stderr=False)
 err_console = Console(stderr=True, style="bold red")
@@ -135,6 +143,81 @@ def policy_validate(
         f"install_scripts={pol.install_scripts}, "
         f"analyzers={{{', '.join(pol.analyzers) or 'defaults'}}}"
     )
+
+
+@trust_app.command("snapshot")
+def trust_snapshot(
+    path: Path = typer.Argument(Path("."), exists=True, file_okay=False),
+    output: Path | None = typer.Option(None, "--output", "-o"),
+) -> None:
+    """Record the dependency posture currently trusted for this repository."""
+    repo = path.resolve()
+    target = output or (repo / TRUST_FILENAME)
+    snapshot = build_trust_snapshot(repo)
+    if output:
+        target.write_text(json.dumps(snapshot, indent=2) + "\n")
+    else:
+        write_trust_snapshot(repo, snapshot)
+    console.print(
+        f"Wrote trust snapshot to [bold]{target}[/bold] "
+        f"({snapshot['summary']['package_count']} package(s))."
+    )
+
+
+@trust_app.command("diff")
+def trust_diff(
+    path: Path = typer.Argument(Path("."), exists=True, file_okay=False),
+    output_format: str = typer.Option("text", "--format", help="text | json"),
+) -> None:
+    """Compare current dependencies with the committed trust snapshot."""
+    repo = path.resolve()
+    try:
+        diff = compare_repo_to_baseline(repo)
+    except ValueError as exc:
+        err_console.print(f"error: {exc}")
+        raise typer.Exit(2)
+
+    if diff is None:
+        err_console.print(
+            f"error: no {TRUST_FILENAME} found; run 'gatekeeper trust snapshot .' first"
+        )
+        raise typer.Exit(2)
+
+    if output_format == "json":
+        print(json.dumps(diff, indent=2))
+    elif output_format == "text":
+        summary = diff["summary"]
+        console.print(
+            f"[bold]Gatekeeper trust diff[/bold] — "
+            f"{summary['added']} added, {summary['removed']} removed, "
+            f"{summary['changed']} changed"
+        )
+        if diff["risk_events"]:
+            table = Table(show_header=True, header_style="bold", title="Trust drift")
+            for col in ("Severity", "Package", "Rule", "Why"):
+                table.add_column(col)
+            for event in diff["risk_events"]:
+                pkg = (
+                    f"{event.get('ecosystem')}:{event.get('package')}"
+                    if event.get("package") else "-"
+                )
+                table.add_row(
+                    event["severity"],
+                    pkg,
+                    event["rule"],
+                    event["message"],
+                )
+            console.print(table)
+        else:
+            console.print("[green]No security-relevant trust drift detected.[/green]")
+    else:
+        err_console.print("error: unknown format (text|json)")
+        raise typer.Exit(2)
+
+    blocking = any(
+        event["severity"] in {"high", "critical"} for event in diff["risk_events"]
+    )
+    raise typer.Exit(1 if blocking else 0)
 
 
 @app.command()

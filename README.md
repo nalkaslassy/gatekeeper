@@ -31,7 +31,8 @@ Adopting on a codebase with existing debt? Record it, then block only regression
 
 ```bash
 gatekeeper baseline .           # writes .gatekeeper-baseline.json — commit it
-gatekeeper scan .               # now fails only on NEW findings
+gatekeeper trust snapshot .     # writes .gatekeeper-trust.json — commit it
+gatekeeper scan .               # now fails on new findings + risky trust drift
 ```
 
 ## CI (GitHub Actions)
@@ -52,6 +53,8 @@ tests and lints Gatekeeper's own source — see [Development](#development).)
 | `gatekeeper scan --analyzers lockfile,bandit` | Run a subset |
 | `gatekeeper baseline [PATH]` | Record current findings as accepted baseline |
 | `gatekeeper sbom [PATH] --output bom.cdx.json` | Generate a static CycloneDX 1.6 SBOM |
+| `gatekeeper trust snapshot [PATH]` | Record the dependency posture you currently trust |
+| `gatekeeper trust diff [PATH]` | Compare current dependencies to the committed trust snapshot |
 | `gatekeeper policy init` / `policy validate` | Create / check `gatekeeper.yaml` |
 
 Exit codes: `0` passed · `1` blocking findings · `2` execution/config error.
@@ -71,6 +74,7 @@ analyzers:
   gitleaks:  { enabled: true, required: false }
   lockfile:  { enabled: true }
   dependency_confusion: { enabled: true }
+  trust_drift: { enabled: true }
   typosquat: { enabled: true }
   osv:       { enabled: false, required: false }  # opt-in, makes network calls
 
@@ -91,6 +95,41 @@ supply_chain:
 
 Policy lives in the repo, so loosening it is itself a reviewable diff.
 
+## Trust drift
+
+Gatekeeper can record the dependency posture a team explicitly reviewed and then
+flag security-relevant changes on later upgrades. This is intentionally different
+from a CVE-only scanner: the question is not merely whether the candidate version
+has a published advisory, but whether it became materially more dangerous than
+the version already trusted.
+
+Create and commit a baseline:
+
+```bash
+gatekeeper trust snapshot .
+git add .gatekeeper-trust.json
+```
+
+Then review future changes:
+
+```bash
+gatekeeper trust diff .
+```
+
+The current engine records package identity/version, direct-vs-transitive status,
+source type/URL, integrity hash when the lockfile provides one, install-script
+state, and dependency-count metadata when available. High-signal drift includes:
+
+- integrity changing without a version change (critical),
+- package source/source type changing,
+- a lifecycle install script appearing where none existed before,
+- a new direct Git/URL dependency, and
+- large dependency-graph expansion.
+
+When a committed snapshot exists, the normal `gatekeeper scan` command runs the
+`trust_drift` analyzer automatically and emits these events as standard findings,
+so the existing policy threshold can block the PR.
+
 ## Supply-chain coverage
 
 What's covered today, and what still requires a human or a heavier tool:
@@ -110,6 +149,7 @@ What's covered today, and what still requires a human or a heavier tool:
 | CycloneDX SBOM from supported lockfiles/manifests | `gatekeeper sbom` | no | ✅ npm package-lock (v1-v3), exact requirements.txt pins, poetry.lock, uv.lock |
 | Dependency-confusion exposure for configured internal names/scopes | `dependency_confusion` | no | ✅ verifies repo config binds private npm/PyPI names to private registries; does not claim a public-name collision without an online check |
 | Runtime/dynamic analysis of install scripts (sandboxed execution) | — | — | ❌ roadmap only, see below — this is a real isolation/infra project (container runtime, syscall monitoring), not something bolted on statically |
+| Trust drift vs a previously reviewed dependency posture | `trust_drift` | no | ✅ source/integrity/install-script/direct-source/dependency-expansion changes |
 | In-place compromise of an *already-baselined* dependency | `lockfile` | no | ✅ partial — the install-script finding's fingerprint includes the version, so a version bump resurfaces for review even if an older version was already accepted. This only fires when `hasInstallScript`/`requiresBuild` is the signal; a compromise that doesn't touch that flag (e.g. malicious code with no new lifecycle script) won't be caught by static lockfile parsing — `osv` may catch it if the compromised version gets a published advisory |
 
 **Python 3.10 support:** `pyproject.toml`/`poetry.lock`/`uv.lock` parsing uses

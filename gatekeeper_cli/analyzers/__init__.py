@@ -30,6 +30,7 @@ from .python_manifests import (
     requirement_line_name,
     resolved_versions,
 )
+from .trust_drift import run_trust_drift
 from .typosquat import run_typosquat
 
 ANALYZER_TIMEOUT_SECONDS = 300
@@ -396,6 +397,7 @@ ALL_ANALYZERS = {
     "gitleaks": run_gitleaks,
     "lockfile": run_lockfile,
     "dependency_confusion": run_dependency_confusion,
+    "trust_drift": run_trust_drift,
     "typosquat": run_typosquat,
     "osv": run_osv,
 }
