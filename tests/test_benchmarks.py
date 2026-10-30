@@ -1,4 +1,4 @@
-from benchmarks.run import run_benchmarks
+from gatekeeper_cli.benchmarks.run import run_benchmarks
 
 
 def test_public_benchmark_suite_passes():
