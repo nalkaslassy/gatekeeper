@@ -32,7 +32,7 @@ compromised.
 ## Run
 
 ```bash
-python -m benchmarks.run
+python -m gatekeeper_cli.benchmarks.run
 ```
 
 The runner emits machine-readable JSON and exits nonzero if any expected result
