@@ -29,6 +29,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
+from .content import compare_content_snapshots, scan_content_tree
 from .models import Severity
 from .policy import POLICY_FILENAME, STARTER_POLICY, load_policy
 from .runner import run_scan, to_sarif, write_baseline
@@ -44,8 +45,10 @@ app = typer.Typer(add_completion=False, no_args_is_help=True,
                   help="Validate code for correctness, quality, and supply-chain security.")
 policy_app = typer.Typer(help="Manage the gatekeeper.yaml policy file.")
 trust_app = typer.Typer(help="Record and review dependency trust drift.")
+content_app = typer.Typer(help="Record and compare static package-content fingerprints.")
 app.add_typer(policy_app, name="policy")
 app.add_typer(trust_app, name="trust")
+app.add_typer(content_app, name="content")
 
 console = Console(stderr=False)
 err_console = Console(stderr=True, style="bold red")
@@ -210,6 +213,62 @@ def trust_diff(
             console.print(table)
         else:
             console.print("[green]No security-relevant trust drift detected.[/green]")
+    else:
+        err_console.print("error: unknown format (text|json)")
+        raise typer.Exit(2)
+
+    blocking = any(
+        event["severity"] in {"high", "critical"} for event in diff["risk_events"]
+    )
+    raise typer.Exit(1 if blocking else 0)
+
+
+@content_app.command("snapshot")
+def content_snapshot(
+    path: Path = typer.Argument(..., exists=True, file_okay=False),
+    output: Path = typer.Option(Path(".gatekeeper-content.json"), "--output", "-o"),
+) -> None:
+    """Create a static fingerprint for an extracted package directory."""
+    snapshot = scan_content_tree(path.resolve())
+    output.write_text(json.dumps(snapshot, indent=2) + "\n")
+    console.print(
+        f"Wrote content snapshot to [bold]{output}[/bold] "
+        f"({snapshot['summary']['file_count']} file(s))."
+    )
+
+
+@content_app.command("diff")
+def content_diff(
+    path: Path = typer.Argument(..., exists=True, file_okay=False),
+    baseline: Path = typer.Option(..., "--baseline", "-b", exists=True, dir_okay=False),
+    output_format: str = typer.Option("text", "--format", help="text | json"),
+) -> None:
+    """Compare an extracted package directory with a prior content snapshot."""
+    try:
+        before = json.loads(baseline.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        err_console.print(f"error: invalid content baseline: {exc}")
+        raise typer.Exit(2)
+    diff = compare_content_snapshots(before, scan_content_tree(path.resolve()))
+
+    if output_format == "json":
+        print(json.dumps(diff, indent=2))
+    elif output_format == "text":
+        console.print(
+            f"[bold]Gatekeeper content diff[/bold] — "
+            f"{diff['summary']['added_files']} added, "
+            f"{diff['summary']['removed_files']} removed, "
+            f"{diff['summary']['changed_files']} changed"
+        )
+        if diff["risk_events"]:
+            table = Table(show_header=True, header_style="bold", title="Content drift")
+            for col in ("Severity", "Rule", "Why"):
+                table.add_column(col)
+            for event in diff["risk_events"]:
+                table.add_row(event["severity"], event["rule"], event["message"])
+            console.print(table)
+        else:
+            console.print("[green]No high-signal content drift detected.[/green]")
     else:
         err_console.print("error: unknown format (text|json)")
         raise typer.Exit(2)
