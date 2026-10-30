@@ -131,11 +131,14 @@ When a committed snapshot exists, the normal `gatekeeper scan` command runs the
 so the existing policy threshold can block the PR.
 
 Gatekeeper also ships a deterministic benchmark corpus under `benchmarks/`.
-It currently includes two benign public-release dependency transitions and five
-controlled security-drift mutations. Run `python -m gatekeeper_cli.benchmarks.run` to reproduce
+It currently includes two benign public-release dependency transitions, five
+controlled security-drift mutations, and four reconstructed historical npm
+supply-chain incidents. Run `python -m gatekeeper_cli.benchmarks.run` to reproduce
 the case-level results locally; CI runs the same corpus on every pull request.
-The reported precision/recall values apply only to that checked-in corpus and are
-not claims about all software supply-chain attacks.
+The historical set currently detects 2 of 4 reconstructed incidents and deliberately
+retains 2 misses (event-stream and colors) to document blind spots. Reported
+precision/recall values apply only to the checked-in corpus and are not claims
+about all software supply-chain attacks.
 
 ## Supply-chain coverage
 
