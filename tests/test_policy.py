@@ -14,6 +14,10 @@ def test_defaults_with_no_file(tmp_path):
     assert pol.install_scripts == "warn"
     assert pol.unpinned_python_deps == Severity.MEDIUM
     assert pol.typosquat == Severity.HIGH
+    assert pol.dependency_confusion == Severity.HIGH
+    assert pol.internal_npm_scopes == frozenset()
+    assert pol.internal_npm_packages == frozenset()
+    assert pol.internal_pypi_packages == frozenset()
     assert pol.source_path is None
 
 
@@ -115,3 +119,18 @@ def test_analyzer_required_defaults_true(tmp_path):
     pol = Policy()
     assert pol.analyzer_required("ruff") is True
     assert pol.analyzer_required("bandit") is True
+
+
+def test_dependency_confusion_policy_parses_internal_names(tmp_path):
+    (tmp_path / POLICY_FILENAME).write_text(
+        "version: 1\nsupply_chain:\n"
+        "  dependency_confusion: medium\n"
+        "  internal_npm_scopes: ['@acme']\n"
+        "  internal_npm_packages: [acme-core]\n"
+        "  internal_pypi_packages: [Acme_Core]\n"
+    )
+    pol = load_policy(tmp_path)
+    assert pol.dependency_confusion == Severity.MEDIUM
+    assert pol.internal_npm_scopes == frozenset({"@acme"})
+    assert pol.internal_npm_packages == frozenset({"acme-core"})
+    assert pol.internal_pypi_packages == frozenset({"acme-core"})
