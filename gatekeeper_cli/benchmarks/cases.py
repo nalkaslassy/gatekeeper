@@ -118,6 +118,112 @@ def _npm_control_base() -> tuple[dict, dict]:
     return before, deepcopy(before)
 
 
+
+
+def _historical_cases() -> list[dict]:
+    """Reconstructed historical incidents from public postmortems/advisories.
+
+    These cases encode only the trust fields Gatekeeper currently understands.
+    They intentionally include expected misses so the benchmark documents blind
+    spots instead of turning historical incidents into controlled toy cases.
+    """
+    return [
+        {
+            "id": "historical-eslint-scope-3.7.2",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "eslint-scope",
+                "before": "3.7.1",
+                "malicious": "3.7.2",
+                "incident_date": "2018-07-12",
+                "evidence": [
+                    "https://archive.eslint.org/blog/2018/07/postmortem-for-malicious-package-publishes",
+                    "https://github.com/advisories/GHSA-hxxf-q3w9-4xgw",
+                ],
+                "basis": "ESLint reports that 3.7.2 contained a malicious postinstall script.",
+            },
+            "baseline": snapshot([
+                pkg("eslint-scope", "3.7.1", direct=False, install_script=False),
+            ]),
+            "current": snapshot([
+                pkg("eslint-scope", "3.7.2", direct=False, install_script=True),
+            ]),
+            "expected_rules": ["install-script-added"],
+            "expected_detected": True,
+        },
+        {
+            "id": "historical-ua-parser-js-0.7.29",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "ua-parser-js",
+                "before": "0.7.28",
+                "malicious": "0.7.29",
+                "incident_date": "2021-10-22",
+                "evidence": [
+                    "https://github.com/advisories/GHSA-pjwm-rvh2-c87w",
+                    "https://github.com/readme/guides/dependency-risk",
+                ],
+                "basis": "Public incident documentation describes malicious pre-install execution in compromised versions.",
+            },
+            "baseline": snapshot([
+                pkg("ua-parser-js", "0.7.28", direct=False, install_script=False),
+            ]),
+            "current": snapshot([
+                pkg("ua-parser-js", "0.7.29", direct=False, install_script=True),
+            ]),
+            "expected_rules": ["install-script-added"],
+            "expected_detected": True,
+        },
+        {
+            "id": "historical-event-stream-3.3.6",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "event-stream",
+                "before": "3.3.4",
+                "malicious": "3.3.6",
+                "incident_date": "2018-09-09",
+                "evidence": [
+                    "https://github.com/advisories/GHSA-mh6f-8j2x-4483",
+                    "https://snyk.io/blog/a-post-mortem-of-the-malicious-event-stream-backdoor/",
+                ],
+                "basis": "3.3.6 added malicious flatmap-stream as a dependency; one added transitive dependency is below Gatekeeper's graph-expansion threshold.",
+            },
+            "baseline": snapshot([
+                pkg("event-stream", "3.3.4", direct=True, dependency_count=10),
+            ]),
+            "current": snapshot([
+                pkg("event-stream", "3.3.6", direct=True, dependency_count=11),
+                pkg("flatmap-stream", "0.1.1", direct=False),
+            ]),
+            "expected_rules": [],
+            "expected_detected": False,
+        },
+        {
+            "id": "historical-colors-1.4.1",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "colors",
+                "before": "1.4.0",
+                "malicious": "1.4.1",
+                "incident_date": "2022-01-08",
+                "evidence": [
+                    "https://snyk.io/blog/open-source-npm-packages-colors-faker/",
+                    "https://github.com/readme/guides/dependency-risk",
+                ],
+                "basis": "The malicious behavior was introduced in package source code without a trust-field change Gatekeeper currently models.",
+            },
+            "baseline": snapshot([
+                pkg("colors", "1.4.0", direct=False),
+            ]),
+            "current": snapshot([
+                pkg("colors", "1.4.1", direct=False),
+            ]),
+            "expected_rules": [],
+            "expected_detected": False,
+        },
+    ]
+
+
 def benchmark_cases() -> list[dict]:
     cases: list[dict] = [
         {
@@ -235,4 +341,5 @@ def benchmark_cases() -> list[dict]:
         "expected_rules": ["dependency-graph-expansion"],
     })
 
+    cases.extend(_historical_cases())
     return cases
