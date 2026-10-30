@@ -21,6 +21,7 @@ import yaml
 
 from ..models import AnalyzerResult, Finding, Severity
 from ..policy import Policy
+from .dependency_confusion import run_dependency_confusion
 from .osv import run_osv
 from .python_manifests import (
     normalize_pypi_name,
@@ -394,6 +395,7 @@ ALL_ANALYZERS = {
     "bandit": run_bandit,
     "gitleaks": run_gitleaks,
     "lockfile": run_lockfile,
+    "dependency_confusion": run_dependency_confusion,
     "typosquat": run_typosquat,
     "osv": run_osv,
 }
