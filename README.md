@@ -124,7 +124,8 @@ state, and dependency-count metadata when available. High-signal drift includes:
 - package source/source type changing,
 - a lifecycle install script appearing where none existed before,
 - a new direct Git/URL dependency, and
-- large dependency-graph expansion.
+- large dependency-graph expansion, and
+- a previously known package adding new required dependency edges.
 
 When a committed snapshot exists, the normal `gatekeeper scan` command runs the
 `trust_drift` analyzer automatically and emits these events as standard findings,
@@ -135,8 +136,8 @@ It currently includes two benign public-release dependency transitions, five
 controlled security-drift mutations, and four reconstructed historical npm
 supply-chain incidents. Run `python -m gatekeeper_cli.benchmarks.run` to reproduce
 the case-level results locally; CI runs the same corpus on every pull request.
-The historical set currently detects 2 of 4 reconstructed incidents and deliberately
-retains 2 misses (event-stream and colors) to document blind spots. Reported
+The historical set currently detects 3 of 4 reconstructed incidents and deliberately
+retains the `colors@1.4.1` miss to document a package-content blind spot. Reported
 precision/recall values apply only to the checked-in corpus and are not claims
 about all software supply-chain attacks.
 

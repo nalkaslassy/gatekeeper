@@ -95,3 +95,73 @@ def test_new_direct_git_dependency_is_high_risk(tmp_path):
     diff = compare_trust_snapshots(empty, build_trust_snapshot(tmp_path))
     event = next(e for e in diff["risk_events"] if e["rule"] == "new-direct-nonregistry-source")
     assert event["severity"] == "high"
+
+
+def test_required_dependency_edge_addition_is_medium_risk():
+    old = {
+        "schema_version": 1,
+        "generated_at": "old",
+        "summary": {"package_count": 1},
+        "packages": [{
+            "ecosystem": "npm", "name": "event-stream", "version": "3.3.4",
+            "direct": True, "source": None, "source_kind": "registry",
+            "integrity": None, "install_script": False,
+            "dependency_count": 7,
+            "required_dependencies": ["through", "split"],
+        }],
+    }
+    new = {
+        "schema_version": 1,
+        "generated_at": "new",
+        "summary": {"package_count": 2},
+        "packages": [{
+            "ecosystem": "npm", "name": "event-stream", "version": "3.3.6",
+            "direct": True, "source": None, "source_kind": "registry",
+            "integrity": None, "install_script": False,
+            "dependency_count": 8,
+            "required_dependencies": ["through", "split", "flatmap-stream"],
+        }, {
+            "ecosystem": "npm", "name": "flatmap-stream", "version": "0.1.1",
+            "direct": False, "source": None, "source_kind": "registry",
+            "integrity": None, "install_script": False,
+            "dependency_count": 0,
+            "required_dependencies": [],
+        }],
+    }
+
+    diff = compare_trust_snapshots(old, new)
+    event = next(
+        e for e in diff["risk_events"] if e["rule"] == "required-dependency-added"
+    )
+    assert event["severity"] == "medium"
+    assert event["package"] == "event-stream"
+    assert "flatmap-stream" in event["message"]
+
+
+def test_old_snapshots_without_required_dependencies_remain_compatible():
+    old = {
+        "schema_version": 1,
+        "generated_at": "old",
+        "summary": {"package_count": 1},
+        "packages": [{
+            "ecosystem": "npm", "name": "x", "version": "1.0.0",
+            "direct": True, "source": None, "source_kind": "registry",
+            "integrity": None, "install_script": False, "dependency_count": 0,
+        }],
+    }
+    new = {
+        "schema_version": 1,
+        "generated_at": "new",
+        "summary": {"package_count": 1},
+        "packages": [{
+            "ecosystem": "npm", "name": "x", "version": "1.1.0",
+            "direct": True, "source": None, "source_kind": "registry",
+            "integrity": None, "install_script": False, "dependency_count": 1,
+            "required_dependencies": ["y"],
+        }],
+    }
+
+    diff = compare_trust_snapshots(old, new)
+    assert "required-dependency-added" not in {
+        e["rule"] for e in diff["risk_events"]
+    }

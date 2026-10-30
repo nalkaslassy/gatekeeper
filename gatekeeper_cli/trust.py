@@ -87,6 +87,7 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
             deps = meta.get("dependencies")
             optional = meta.get("optionalDependencies")
             peer = meta.get("peerDependencies")
+            required_dependencies = sorted(deps) if isinstance(deps, dict) else []
             dep_count = sum(
                 len(section) for section in (deps, optional, peer)
                 if isinstance(section, dict)
@@ -101,6 +102,7 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
                 "integrity": meta.get("integrity"),
                 "install_script": bool(meta.get("hasInstallScript", False)),
                 "dependency_count": dep_count,
+                "required_dependencies": required_dependencies,
             })
         return out
 
@@ -123,6 +125,7 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
                     "integrity": meta.get("integrity"),
                     "install_script": None,
                     "dependency_count": len(child) if isinstance(child, dict) else 0,
+                    "required_dependencies": sorted(child) if isinstance(child, dict) else [],
                 })
             child = meta.get("dependencies")
             if isinstance(child, dict):
@@ -198,6 +201,7 @@ def _python_snapshot(repo: Path) -> list[dict[str, Any]]:
             "integrity": None,
             "install_script": None,
             "dependency_count": None,
+            "required_dependencies": None,
         })
     return out
 
@@ -268,7 +272,7 @@ def compare_trust_snapshots(
         fields: dict[str, dict[str, Any]] = {}
         for field in (
             "version", "source", "source_kind", "integrity",
-            "install_script", "dependency_count", "direct",
+            "install_script", "dependency_count", "required_dependencies", "direct",
         ):
             if before.get(field) != after.get(field):
                 fields[field] = {"before": before.get(field), "after": after.get(field)}
@@ -316,6 +320,18 @@ def compare_trust_snapshots(
                 "A lifecycle install script appeared in a dependency that previously "
                 "did not require install-time code execution.",
             ))
+
+        before_required = before.get("required_dependencies")
+        after_required = after.get("required_dependencies")
+        if isinstance(before_required, list) and isinstance(after_required, list):
+            added_required = sorted(set(after_required) - set(before_required))
+            if added_required:
+                risk_events.append(_event(
+                    "medium", "required-dependency-added", after,
+                    "Package added required dependency edge(s): "
+                    + ", ".join(added_required[:5])
+                    + (" ..." if len(added_required) > 5 else ""),
+                ))
 
         old_count = before.get("dependency_count")
         new_count = after.get("dependency_count")

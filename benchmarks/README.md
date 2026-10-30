@@ -52,14 +52,12 @@ The corpus now includes four reconstructed historical npm supply-chain incidents
 |---|---|---|
 | `eslint-scope@3.7.2` (2018) | detected | malicious install script appeared |
 | `ua-parser-js@0.7.29` (2021) | detected | malicious install-time execution appeared |
-| `event-stream@3.3.6` (2018) | missed | one malicious transitive dependency was added, below the current graph-expansion threshold |
+| `event-stream@3.3.6` (2018) | detected | existing package added a new required dependency edge to `flatmap-stream` |
 | `colors@1.4.1` (2022) | missed | malicious behavior changed inside package source without changing a modeled trust field |
 
 The historical reconstructions are intentionally not tuned to a perfect score.
 They encode only facts supported by public incident documentation and only fields
-Gatekeeper currently understands. The misses are part of the result: they show
-where source-code behavior analysis, provenance, publisher identity, or more
-sensitive dependency-delta logic may add value.
+Gatekeeper currently understands. The remaining miss is part of the result: it shows where package-content or behavior analysis, provenance, and publisher identity may add value.
 
 Evidence URLs for every reconstructed incident are stored with the benchmark case
 in `gatekeeper_cli/benchmarks/cases.py`.
