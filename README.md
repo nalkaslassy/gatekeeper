@@ -69,6 +69,7 @@ analyzers:
   bandit:    { enabled: true }
   gitleaks:  { enabled: true, required: false }
   lockfile:  { enabled: true }
+  dependency_confusion: { enabled: true }
   typosquat: { enabled: true }
   osv:       { enabled: false, required: false }  # opt-in, makes network calls
 
@@ -80,6 +81,11 @@ supply_chain:
                                 # resolves them
   typosquat: high               # bundled popular-package list, no network
   typosquat_allow: []           # known-good near-misses, suppressed by exact name
+
+  dependency_confusion: high
+  internal_npm_scopes: []       # e.g. ["@yourcompany"]
+  internal_npm_packages: []     # private unscoped npm names
+  internal_pypi_packages: []    # private Python distribution names
 ```
 
 Policy lives in the repo, so loosening it is itself a reviewable diff.
@@ -101,7 +107,7 @@ What's covered today, and what still requires a human or a heavier tool:
 | Known CVEs/advisories for pinned versions | `osv` (opt-in) | **yes**, OSV.dev | ✅ when enabled — resolves versions from `requirements.txt`/`pyproject.toml` exact pins and `poetry.lock`/`uv.lock`, with the lockfile winning on conflict |
 | Known-malicious package versions | `osv` (opt-in) | **yes**, OSV.dev | ✅ when enabled — OSV ingests the OpenSSF malicious-packages feed as `MAL-*` advisories |
 | CycloneDX SBOM from supported lockfiles/manifests | `gatekeeper sbom` | no | ✅ npm package-lock (v1-v3), exact requirements.txt pins, poetry.lock, uv.lock |
-| Dependency confusion (internal name resolvable on public registry) | — | — | ❌ not built |
+| Dependency-confusion exposure for configured internal names/scopes | `dependency_confusion` | no | ✅ verifies repo config binds private npm/PyPI names to private registries; does not claim a public-name collision without an online check |
 | Runtime/dynamic analysis of install scripts (sandboxed execution) | — | — | ❌ roadmap only, see below — this is a real isolation/infra project (container runtime, syscall monitoring), not something bolted on statically |
 | In-place compromise of an *already-baselined* dependency | `lockfile` | no | ✅ partial — the install-script finding's fingerprint includes the version, so a version bump resurfaces for review even if an older version was already accepted. This only fires when `hasInstallScript`/`requiresBuild` is the signal; a compromise that doesn't touch that flag (e.g. malicious code with no new lifecycle script) won't be caught by static lockfile parsing — `osv` may catch it if the compromised version gets a published advisory |
 
@@ -161,7 +167,7 @@ been run; see the one-time PyPI setup this needs before the first release.
 Server mode with sandboxed test execution (rootless Docker → gVisor →
 Firecracker path) — a real isolation/infra project, intentionally not
 attempted as a bolt-on to the static analyzers — plus dependency-confusion
-detection, Verdaccio registry mirroring with `npm ci --ignore-scripts`, and an
-MCP server so agents can query scan results. Static CycloneDX SBOM generation
+optional online confirmation of public registry name collisions, Verdaccio registry mirroring with `npm ci --ignore-scripts`, and an
+MCP server so agents can query scan results. Static dependency-confusion exposure checks and CycloneDX SBOM generation
 is available today via `gatekeeper sbom`.
 See `docs/design.md` for the full architecture.
