@@ -1,1 +1,0 @@
-"""Gatekeeper benchmark package."""
