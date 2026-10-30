@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from gatekeeper_cli.content import compare_content_snapshots
 from gatekeeper_cli.trust import compare_trust_snapshots
 
 from .cases import benchmark_cases
@@ -16,7 +17,15 @@ def run_benchmarks() -> dict:
 
     for case in benchmark_cases():
         diff = compare_trust_snapshots(case["baseline"], case["current"])
-        observed = sorted({event["rule"] for event in diff["risk_events"]})
+        observed_rules = {event["rule"] for event in diff["risk_events"]}
+        if "content_baseline" in case and "content_current" in case:
+            content_diff = compare_content_snapshots(
+                case["content_baseline"], case["content_current"]
+            )
+            observed_rules.update(
+                event["rule"] for event in content_diff["risk_events"]
+            )
+        observed = sorted(observed_rules)
         expected = sorted(case["expected_rules"])
         passed = observed == expected
 
