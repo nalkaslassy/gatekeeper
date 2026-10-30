@@ -1,13 +1,9 @@
 """Shared parsing for Python dependency manifests beyond requirements.txt:
 pyproject.toml's [project.dependencies], poetry.lock, and uv.lock.
 
-tomllib is stdlib-only from Python 3.11 onward. This project's floor is
-3.10 (see pyproject.toml requires-python), and adding the `tomli` backport
-would be a new runtime dependency — not worth it for one still-supported
-minor version. On 3.10, parsing here simply degrades to "found nothing" in
-these files rather than crashing or requiring a new dependency; every
-caller already treats an empty result as "no data from this source" for
-requirements.txt-derived data too.
+Python 3.11+ uses the standard-library tomllib module. Python 3.10 uses
+the small conditional tomli backport so manifest and lockfile coverage is
+consistent across every Python version Gatekeeper supports.
 """
 
 from __future__ import annotations
@@ -18,7 +14,7 @@ from pathlib import Path
 try:
     import tomllib
 except ImportError:  # Python 3.10
-    tomllib = None  # type: ignore[assignment]
+    import tomli as tomllib
 
 _PEP508_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 _REQ_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
@@ -43,7 +39,7 @@ def requirement_line_name(line: str) -> str:
 
 
 def _load_toml(path: Path) -> dict:
-    if tomllib is None or not path.exists():
+    if not path.exists():
         return {}
     try:
         with path.open("rb") as f:
