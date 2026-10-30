@@ -69,24 +69,18 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def scan_content_tree(root: Path) -> dict[str, Any]:
-    root = root.resolve()
+def scan_content_files(files_by_path: dict[str, bytes | str]) -> dict[str, Any]:
     files: list[dict[str, Any]] = []
     capabilities: set[str] = set()
     pattern_hits: list[dict[str, Any]] = []
     native_files: list[str] = []
     code_bytes = 0
 
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
-        rel = path.relative_to(root).as_posix()
-        if any(part in {".git", "__pycache__"} for part in path.parts):
-            continue
-        try:
-            data = path.read_bytes()
-        except OSError:
-            continue
+    for rel in sorted(files_by_path):
+        raw = files_by_path[rel]
+        data = raw.encode() if isinstance(raw, str) else raw
+        suffix = Path(rel).suffix.lower()
 
-        suffix = path.suffix.lower()
         files.append({
             "path": rel,
             "size": len(data),
@@ -124,6 +118,20 @@ def scan_content_tree(root: Path) -> dict[str, Any]:
             pattern_hits, key=lambda hit: (hit["rule"], hit["file"])
         ),
     }
+
+
+def scan_content_tree(root: Path) -> dict[str, Any]:
+    root = root.resolve()
+    data: dict[str, bytes] = {}
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        rel = path.relative_to(root).as_posix()
+        if any(part in {".git", "__pycache__"} for part in path.parts):
+            continue
+        try:
+            data[rel] = path.read_bytes()
+        except OSError:
+            continue
+    return scan_content_files(data)
 
 
 def compare_content_snapshots(
