@@ -44,6 +44,26 @@ The benchmark reports case-level precision and controlled-case recall. Those
 metrics apply only to this checked-in corpus. They are not estimates of
 Gatekeeper's performance against all real-world software supply-chain attacks.
 
-The next benchmark phase should add historical incident reconstruction, pnpm and
-Yarn transitions, and a larger benign corpus before making broader detection
-claims.
+## Historical incident reconstruction
+
+The corpus now includes four reconstructed historical npm supply-chain incidents:
+
+| Incident | Gatekeeper result | Why |
+|---|---|---|
+| `eslint-scope@3.7.2` (2018) | detected | malicious install script appeared |
+| `ua-parser-js@0.7.29` (2021) | detected | malicious install-time execution appeared |
+| `event-stream@3.3.6` (2018) | missed | one malicious transitive dependency was added, below the current graph-expansion threshold |
+| `colors@1.4.1` (2022) | missed | malicious behavior changed inside package source without changing a modeled trust field |
+
+The historical reconstructions are intentionally not tuned to a perfect score.
+They encode only facts supported by public incident documentation and only fields
+Gatekeeper currently understands. The misses are part of the result: they show
+where source-code behavior analysis, provenance, publisher identity, or more
+sensitive dependency-delta logic may add value.
+
+Evidence URLs for every reconstructed incident are stored with the benchmark case
+in `gatekeeper_cli/benchmarks/cases.py`.
+
+The next benchmark phase should add more historical incidents, pnpm and Yarn
+transitions, a larger benign corpus, and provenance-aware cases before making
+broader detection claims.

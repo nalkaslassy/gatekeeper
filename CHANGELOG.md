@@ -8,6 +8,7 @@ versioning for published releases.
 ## [Unreleased]
 
 ### Added
+- Historical supply-chain incident benchmark covering eslint-scope, ua-parser-js, event-stream, and colors with explicit detections and misses.
 - Deterministic trust-drift benchmark corpus with benign public-release transitions, controlled security-drift cases, machine-readable results, and CI enforcement.
 - Change-aware dependency trust snapshots with `gatekeeper trust snapshot`.
 - Trust-drift review with `gatekeeper trust diff` and automatic scan findings for integrity, source, install-script, non-registry-source, and dependency-graph changes.
