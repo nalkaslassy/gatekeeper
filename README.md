@@ -50,6 +50,7 @@ tests and lints Gatekeeper's own source — see [Development](#development).)
 | `gatekeeper scan --fail-on medium` | Override the policy threshold |
 | `gatekeeper scan --analyzers lockfile,bandit` | Run a subset |
 | `gatekeeper baseline [PATH]` | Record current findings as accepted baseline |
+| `gatekeeper sbom [PATH] --output bom.cdx.json` | Generate a static CycloneDX 1.6 SBOM |
 | `gatekeeper policy init` / `policy validate` | Create / check `gatekeeper.yaml` |
 
 Exit codes: `0` passed · `1` blocking findings · `2` execution/config error.
@@ -99,6 +100,7 @@ What's covered today, and what still requires a human or a heavier tool:
 | Typosquat package names (`expres` vs `express`) | `typosquat` | no | ✅ edit-distance ≤2 against a bundled, curated (not download-ranked) list — expect false negatives for anything not on the list, and treat hits as "look closer," not proof. Also checks `pyproject.toml` deps, and scoped npm packages both by their unscoped part (`@myorg/expres`) and by scope lookalike (`@type/x` vs the real `@types/x`). Suppressible per-name via `supply_chain.typosquat_allow` |
 | Known CVEs/advisories for pinned versions | `osv` (opt-in) | **yes**, OSV.dev | ✅ when enabled — resolves versions from `requirements.txt`/`pyproject.toml` exact pins and `poetry.lock`/`uv.lock`, with the lockfile winning on conflict |
 | Known-malicious package versions | `osv` (opt-in) | **yes**, OSV.dev | ✅ when enabled — OSV ingests the OpenSSF malicious-packages feed as `MAL-*` advisories |
+| CycloneDX SBOM from supported lockfiles/manifests | `gatekeeper sbom` | no | ✅ npm package-lock (v1-v3), exact requirements.txt pins, poetry.lock, uv.lock |
 | Dependency confusion (internal name resolvable on public registry) | — | — | ❌ not built |
 | Runtime/dynamic analysis of install scripts (sandboxed execution) | — | — | ❌ roadmap only, see below — this is a real isolation/infra project (container runtime, syscall monitoring), not something bolted on statically |
 | In-place compromise of an *already-baselined* dependency | `lockfile` | no | ✅ partial — the install-script finding's fingerprint includes the version, so a version bump resurfaces for review even if an older version was already accepted. This only fires when `hasInstallScript`/`requiresBuild` is the signal; a compromise that doesn't touch that flag (e.g. malicious code with no new lifecycle script) won't be caught by static lockfile parsing — `osv` may catch it if the compromised version gets a published advisory |
@@ -159,6 +161,7 @@ been run; see the one-time PyPI setup this needs before the first release.
 Server mode with sandboxed test execution (rootless Docker → gVisor →
 Firecracker path) — a real isolation/infra project, intentionally not
 attempted as a bolt-on to the static analyzers — plus dependency-confusion
-detection, SBOM generation, Verdaccio registry mirroring with `npm ci
---ignore-scripts`, and an MCP server so agents can query scan results.
+detection, Verdaccio registry mirroring with `npm ci --ignore-scripts`, and an
+MCP server so agents can query scan results. Static CycloneDX SBOM generation
+is available today via `gatekeeper sbom`.
 See `docs/design.md` for the full architecture.
