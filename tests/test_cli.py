@@ -118,3 +118,31 @@ def test_version_command():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
     assert "gatekeeper-cli" in result.output
+
+
+def test_trust_snapshot_and_diff_cli(fixture_repo):
+    repo = fixture_repo("clean")
+
+    snap = runner.invoke(app, ["trust", "snapshot", str(repo)])
+    assert snap.exit_code == 0, snap.output
+    assert (repo / ".gatekeeper-trust.json").exists()
+
+    clean_diff = runner.invoke(app, ["trust", "diff", str(repo), "--format", "json"])
+    assert clean_diff.exit_code == 0, clean_diff.output
+    assert json.loads(clean_diff.output)["risk_events"] == []
+
+    lock_path = repo / "package-lock.json"
+    lock = json.loads(lock_path.read_text())
+    lock["packages"]["node_modules/left-pad"]["hasInstallScript"] = True
+    lock_path.write_text(json.dumps(lock))
+
+    risky_diff = runner.invoke(app, ["trust", "diff", str(repo), "--format", "json"])
+    assert risky_diff.exit_code == 1
+    rules = {e["rule"] for e in json.loads(risky_diff.output)["risk_events"]}
+    assert "install-script-added" in rules
+
+
+def test_trust_diff_without_snapshot_exits_two(fixture_repo):
+    repo = fixture_repo("clean")
+    result = runner.invoke(app, ["trust", "diff", str(repo)])
+    assert result.exit_code == 2
