@@ -9,8 +9,9 @@ against your repo, compares results to a committed baseline, and fails only on
 **new** findings above your policy threshold. Supply-chain checks (missing
 lockfiles across npm/yarn/pnpm, install scripts, unpinned dependencies across
 `requirements.txt`/`pyproject.toml`/`poetry.lock`/`uv.lock`, typosquat package
-names including scoped npm packages) run from pure static parsing — no
-network, no code execution. An opt-in `osv` analyzer adds known-CVE and
+names including scoped npm packages, and configured internal-name registry
+binding checks for dependency-confusion exposure) run from pure static parsing —
+no network, no code execution. An opt-in `osv` analyzer adds known-CVE and
 known-malicious-package lookup via OSV.dev for repos willing to trade that one
 static-first guarantee for broader coverage. See
 [Supply-chain coverage](#supply-chain-coverage) for exactly what is and isn't
@@ -102,7 +103,7 @@ What's covered today, and what still requires a human or a heavier tool:
 | Install scripts in `yarn.lock`-only projects | — | — | ❌ classic `yarn.lock` carries no script metadata at all; detecting it needs a registry lookup, which this analyzer deliberately doesn't do |
 | npm `lockfileVersion: 1` (pre-npm-7) lockfiles | `lockfile` | no | ✅ flagged at low severity — v1 has no per-package metadata, so install-script detection is silently blind on it; upgrading the lockfile format is the fix |
 | Unpinned `requirements.txt` entries | `lockfile` | no | ✅ |
-| Unpinned `pyproject.toml` `[project.dependencies]` | `lockfile` | no | ✅ (Python 3.11+ only — see note below), suppressed when a `poetry.lock`/`uv.lock` resolves the dependency to an exact version regardless of the range in the manifest |
+| Unpinned `pyproject.toml` `[project.dependencies]` | `lockfile` | no | ✅ on Python 3.10+ (tomli backport on 3.10), suppressed when a `poetry.lock`/`uv.lock` resolves the dependency to an exact version regardless of the range in the manifest |
 | Typosquat package names (`expres` vs `express`) | `typosquat` | no | ✅ edit-distance ≤2 against a bundled, curated (not download-ranked) list — expect false negatives for anything not on the list, and treat hits as "look closer," not proof. Also checks `pyproject.toml` deps, and scoped npm packages both by their unscoped part (`@myorg/expres`) and by scope lookalike (`@type/x` vs the real `@types/x`). Suppressible per-name via `supply_chain.typosquat_allow` |
 | Known CVEs/advisories for pinned versions | `osv` (opt-in) | **yes**, OSV.dev | ✅ when enabled — resolves versions from `requirements.txt`/`pyproject.toml` exact pins and `poetry.lock`/`uv.lock`, with the lockfile winning on conflict |
 | Known-malicious package versions | `osv` (opt-in) | **yes**, OSV.dev | ✅ when enabled — OSV ingests the OpenSSF malicious-packages feed as `MAL-*` advisories |
@@ -111,11 +112,10 @@ What's covered today, and what still requires a human or a heavier tool:
 | Runtime/dynamic analysis of install scripts (sandboxed execution) | — | — | ❌ roadmap only, see below — this is a real isolation/infra project (container runtime, syscall monitoring), not something bolted on statically |
 | In-place compromise of an *already-baselined* dependency | `lockfile` | no | ✅ partial — the install-script finding's fingerprint includes the version, so a version bump resurfaces for review even if an older version was already accepted. This only fires when `hasInstallScript`/`requiresBuild` is the signal; a compromise that doesn't touch that flag (e.g. malicious code with no new lifecycle script) won't be caught by static lockfile parsing — `osv` may catch it if the compromised version gets a published advisory |
 
-**Note on Python 3.10:** `pyproject.toml`/`poetry.lock`/`uv.lock` parsing uses
-the stdlib `tomllib`, which doesn't exist before Python 3.11. Rather than add
-a `tomli` backport as a new runtime dependency for one still-supported minor
-version, these three checks simply find nothing on 3.10 — `requirements.txt`
-parsing is unaffected on any supported version.
+**Python 3.10 support:** `pyproject.toml`/`poetry.lock`/`uv.lock` parsing uses
+the standard-library `tomllib` on Python 3.11+ and the conditional `tomli`
+backport on Python 3.10, so manifest and lockfile coverage is consistent across
+all supported Python versions.
 
 **Judgment call worth knowing about:** flagging a bare `dependencies =
 ["typer>=0.12", ...]` in `pyproject.toml` as "unpinned" (when there's no
