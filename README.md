@@ -132,7 +132,7 @@ so the existing policy threshold can block the PR.
 
 Gatekeeper also ships a deterministic benchmark corpus under `benchmarks/`.
 It currently includes two benign public-release dependency transitions and five
-controlled security-drift mutations. Run `python -m benchmarks.run` to reproduce
+controlled security-drift mutations. Run `python -m gatekeeper_cli.benchmarks.run` to reproduce
 the case-level results locally; CI runs the same corpus on every pull request.
 The reported precision/recall values apply only to that checked-in corpus and are
 not claims about all software supply-chain attacks.
