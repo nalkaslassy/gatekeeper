@@ -136,8 +136,8 @@ It currently includes two benign public-release dependency transitions, five
 controlled security-drift mutations, and four reconstructed historical npm
 supply-chain incidents. Run `python -m gatekeeper_cli.benchmarks.run` to reproduce
 the case-level results locally; CI runs the same corpus on every pull request.
-The historical set currently detects 3 of 4 reconstructed incidents and deliberately
-retains the `colors@1.4.1` miss to document a package-content blind spot. Reported
+The historical set currently detects all 4 reconstructed incidents using the combined
+metadata and static-content benchmark. This remains a small corpus and is not a universal detection-rate claim. Reported
 precision/recall values apply only to the checked-in corpus and are not claims
 about all software supply-chain attacks.
 
