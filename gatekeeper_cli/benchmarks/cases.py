@@ -26,6 +26,7 @@ def pkg(
     integrity: str | None = None,
     install_script: bool = False,
     dependency_count: int = 0,
+    required_dependencies: list[str] | None = None,
 ) -> dict:
     return {
         "ecosystem": "npm",
@@ -40,6 +41,7 @@ def pkg(
         "integrity": integrity,
         "install_script": install_script,
         "dependency_count": dependency_count,
+        "required_dependencies": required_dependencies,
     }
 
 
@@ -189,14 +191,26 @@ def _historical_cases() -> list[dict]:
                 "basis": "3.3.6 added malicious flatmap-stream as a dependency; one added transitive dependency is below Gatekeeper's graph-expansion threshold.",
             },
             "baseline": snapshot([
-                pkg("event-stream", "3.3.4", direct=True, dependency_count=10),
+                pkg(
+                    "event-stream", "3.3.4", direct=True, dependency_count=10,
+                    required_dependencies=[
+                        "duplexer", "from", "map-stream", "pause-stream", "split",
+                        "stream-combiner", "through",
+                    ],
+                ),
             ]),
             "current": snapshot([
-                pkg("event-stream", "3.3.6", direct=True, dependency_count=11),
+                pkg(
+                    "event-stream", "3.3.6", direct=True, dependency_count=11,
+                    required_dependencies=[
+                        "duplexer", "flatmap-stream", "from", "map-stream",
+                        "pause-stream", "split", "stream-combiner", "through",
+                    ],
+                ),
                 pkg("flatmap-stream", "0.1.1", direct=False),
             ]),
-            "expected_rules": [],
-            "expected_detected": False,
+            "expected_rules": ["required-dependency-added"],
+            "expected_detected": True,
         },
         {
             "id": "historical-colors-1.4.1",
