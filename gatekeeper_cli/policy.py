@@ -32,6 +32,7 @@ analyzers:
   bandit:    { enabled: true }    # Python SAST
   gitleaks:  { enabled: true, required: false }  # secret scan (skipped if binary absent)
   lockfile:  { enabled: true }    # dependency & supply-chain checks (no network)
+  dependency_confusion: { enabled: true }  # configured internal names vs registry binding
   typosquat: { enabled: true }    # offline heuristic vs a bundled popular-package list
 
   # Opt-in: known-vulnerability + known-malicious-package lookup via OSV.dev.
@@ -51,6 +52,13 @@ supply_chain:
   # A declared dependency within edit-distance 1-2 of a well-known package
   # name (bundled static list, no network) is a finding at this severity.
   typosquat: high
+  # Static dependency-confusion exposure checks. Declare names/scopes that
+  # are internal; Gatekeeper verifies repository config binds them to private
+  # registries instead of leaving resolution open to public registries.
+  dependency_confusion: high
+  internal_npm_scopes: []
+  internal_npm_packages: []
+  internal_pypi_packages: []
   # Known-good near-misses (deliberate forks, internal packages that
   # legitimately resemble a popular name, etc.) — suppressed by exact name,
   # reviewable in a diff instead of edited out of the analyzer itself.
@@ -76,6 +84,10 @@ class Policy:
     install_scripts: str = "warn"
     unpinned_python_deps: Severity | None = Severity.MEDIUM
     typosquat: Severity | None = Severity.HIGH
+    dependency_confusion: Severity | None = Severity.HIGH
+    internal_npm_scopes: frozenset[str] = field(default_factory=frozenset)
+    internal_npm_packages: frozenset[str] = field(default_factory=frozenset)
+    internal_pypi_packages: frozenset[str] = field(default_factory=frozenset)
     typosquat_allow: frozenset[str] = field(default_factory=frozenset)
     source_path: Path | None = None
 
@@ -134,6 +146,21 @@ def load_policy(repo_path: Path, explicit: Path | None = None) -> Policy:
             sc.get("unpinned_python_deps"), Severity.MEDIUM
         ),
         typosquat=_sev_or_none(sc.get("typosquat"), Severity.HIGH),
+        dependency_confusion=_sev_or_none(
+            sc.get("dependency_confusion"), Severity.HIGH
+        ),
+        internal_npm_scopes=frozenset(
+            str(x) for x in (sc.get("internal_npm_scopes") or [])
+        ),
+        internal_npm_packages=frozenset(
+            str(x) for x in (sc.get("internal_npm_packages") or [])
+        ),
+        internal_pypi_packages=frozenset(
+            normalize for normalize in (
+                str(x).lower().replace("_", "-").replace(".", "-")
+                for x in (sc.get("internal_pypi_packages") or [])
+            )
+        ),
         typosquat_allow=frozenset(str(x) for x in (sc.get("typosquat_allow") or [])),
         source_path=path,
     )
