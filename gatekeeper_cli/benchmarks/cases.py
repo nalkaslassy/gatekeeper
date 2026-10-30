@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from gatekeeper_cli.content import scan_content_files
+
 REGISTRY = "registry"
 
 
@@ -120,6 +122,10 @@ def _npm_control_base() -> tuple[dict, dict]:
     return before, deepcopy(before)
 
 
+
+
+COLORS_140_SOURCE = "var colors = require('./colors');\nmodule['exports'] = colors;\nrequire('./extendStringPrototype')();\n"
+COLORS_141_SOURCE = "var colors = require('./colors');\nmodule['exports'] = colors;\nrequire('./extendStringPrototype')();\n\nlet am = require('../lib/custom/american');\nam();\nfor (let i = 666; i < Infinity; i++) {\n  if (i % 333) {\n  }\n  console.log('testing testing testing testing testing testing testing'.zalgo)\n}\n"
 
 
 def _historical_cases() -> list[dict]:
@@ -232,8 +238,14 @@ def _historical_cases() -> list[dict]:
             "current": snapshot([
                 pkg("colors", "1.4.1", direct=False),
             ]),
-            "expected_rules": [],
-            "expected_detected": False,
+            "content_baseline": scan_content_files({
+                "lib/index.js": COLORS_140_SOURCE,
+            }),
+            "content_current": scan_content_files({
+                "lib/index.js": COLORS_141_SOURCE,
+            }),
+            "expected_rules": ["content-infinite-loop"],
+            "expected_detected": True,
         },
     ]
 

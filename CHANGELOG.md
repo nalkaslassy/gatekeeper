@@ -8,6 +8,7 @@ versioning for published releases.
 ## [Unreleased]
 
 ### Added
+- Static package-content fingerprinting and drift detection with content snapshot/diff CLI, including high-signal patterns such as infinite loops, dynamic code execution, subprocess use, environment access, network access, filesystem writes, encoded blobs, and newly introduced native binaries.
 - Required dependency-edge drift detection, improving historical event-stream coverage without flagging optional dependency churn in the existing benign corpus.
 - Historical supply-chain incident benchmark covering eslint-scope, ua-parser-js, event-stream, and colors with explicit detections and misses.
 - Deterministic trust-drift benchmark corpus with benign public-release transitions, controlled security-drift cases, machine-readable results, and CI enforcement.

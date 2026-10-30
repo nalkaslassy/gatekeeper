@@ -146,3 +146,33 @@ def test_trust_diff_without_snapshot_exits_two(fixture_repo):
     repo = fixture_repo("clean")
     result = runner.invoke(app, ["trust", "diff", str(repo)])
     assert result.exit_code == 2
+
+
+def test_content_snapshot_and_diff_cli(tmp_path):
+    before = tmp_path / "before"
+    after = tmp_path / "after"
+    before.mkdir()
+    after.mkdir()
+    (before / "index.js").write_text("module.exports = 1;\n")
+    (after / "index.js").write_text(
+        "module.exports = 1;\nfor (let i = 0; i < Infinity; i++) {}\n"
+    )
+
+    baseline = tmp_path / "content.json"
+    snap = runner.invoke(
+        app, ["content", "snapshot", str(before), "--output", str(baseline)]
+    )
+    assert snap.exit_code == 0, snap.output
+    assert baseline.exists()
+
+    diff = runner.invoke(
+        app,
+        [
+            "content", "diff", str(after),
+            "--baseline", str(baseline),
+            "--format", "json",
+        ],
+    )
+    assert diff.exit_code == 1
+    rules = {e["rule"] for e in json.loads(diff.output)["risk_events"]}
+    assert "content-infinite-loop" in rules

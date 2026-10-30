@@ -14,9 +14,9 @@ def test_public_benchmark_suite_passes():
     assert summary["case_precision"] == 1.0
     assert summary["controlled_case_recall"] == 1.0
     assert summary["historical_incident_cases"] == 4
-    assert summary["historical_incidents_detected"] == 3
-    assert summary["historical_incidents_missed"] == 1
-    assert summary["historical_incident_recall"] == 0.75
+    assert summary["historical_incidents_detected"] == 4
+    assert summary["historical_incidents_missed"] == 0
+    assert summary["historical_incident_recall"] == 1.0
     assert summary["all_cases_passed"] is True
 
 
@@ -36,4 +36,4 @@ def test_historical_cases_include_expected_hits_and_misses():
     assert by_id["historical-eslint-scope-3.7.2"]["observed_detected"] is True
     assert by_id["historical-ua-parser-js-0.7.29"]["observed_detected"] is True
     assert by_id["historical-event-stream-3.3.6"]["observed_detected"] is True
-    assert by_id["historical-colors-1.4.1"]["observed_detected"] is False
+    assert by_id["historical-colors-1.4.1"]["observed_detected"] is True
