@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
 from gatekeeper_cli.trust import compare_trust_snapshots
 
 from benchmarks.cases import benchmark_cases
