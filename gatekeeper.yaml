@@ -13,6 +13,7 @@ analyzers:
   bandit:    { enabled: true }    # Python SAST
   gitleaks:  { enabled: true, required: false }  # secret scan (skipped if binary absent)
   lockfile:  { enabled: true }    # dependency & supply-chain checks (no network)
+  dependency_confusion: { enabled: true }  # internal names vs registry binding
   typosquat: { enabled: true }    # offline heuristic vs a bundled popular-package list
 
   # Opt-in: known-vulnerability + known-malicious-package lookup via OSV.dev.
@@ -32,3 +33,11 @@ supply_chain:
   # A declared dependency within edit-distance 1-2 of a well-known package
   # name (bundled static list, no network) is a finding at this severity.
   typosquat: high
+
+  # Dependency-confusion exposure checks are static/offline. Fill these with
+  # package names/scopes your organization treats as private; Gatekeeper then
+  # verifies repo config binds them to private registries.
+  dependency_confusion: high
+  internal_npm_scopes: []
+  internal_npm_packages: []
+  internal_pypi_packages: []
