@@ -34,6 +34,7 @@ analyzers:
   gitleaks:  { enabled: true, required: false }  # secret scan (skipped if binary absent)
   lockfile:  { enabled: true }    # dependency & supply-chain checks (no network)
   dependency_confusion: { enabled: true }  # configured internal names vs registry binding
+  trust_drift: { enabled: true }  # compare current dependencies to .gatekeeper-trust.json
   typosquat: { enabled: true }    # offline heuristic vs a bundled popular-package list
 
   # Opt-in: known-vulnerability + known-malicious-package lookup via OSV.dev.
