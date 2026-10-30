@@ -30,10 +30,16 @@ from .python_manifests import (
     requirement_line_name,
     resolved_versions,
 )
-from .trust_drift import run_trust_drift
 from .typosquat import run_typosquat
 
 ANALYZER_TIMEOUT_SECONDS = 300
+
+
+def run_trust_drift(repo: Path, policy: Policy) -> AnalyzerResult:
+    """Lazy adapter avoids a trust<->analyzer import cycle for library users."""
+    from .trust_drift import run_trust_drift as _run_trust_drift
+
+    return _run_trust_drift(repo, policy)
 
 
 def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess:
