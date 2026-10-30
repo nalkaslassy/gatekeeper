@@ -34,7 +34,7 @@ jobs:
         run: ruff check .
 
       - name: Run trust-drift benchmark corpus
-        run: python -m benchmarks.run
+        run: python -m gatekeeper_cli.benchmarks.run
 
       - name: Dogfood — Gatekeeper scans itself
         run: gatekeeper scan .
