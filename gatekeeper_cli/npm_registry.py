@@ -39,7 +39,6 @@ class NpmVersionMetadata:
     version: str
     tarball_url: str
     integrity: str | None
-    shasum: str | None
 
 
 def _read_limited(response: Any, limit: int) -> bytes:
@@ -57,6 +56,9 @@ def _read_limited(response: Any, limit: int) -> bytes:
 
 
 def _open(url: str, *, timeout: int) -> Any:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError(f"refusing non-HTTPS or invalid URL: {url}")
     request = urllib.request.Request(
         url,
         headers={
@@ -65,7 +67,7 @@ def _open(url: str, *, timeout: int) -> Any:
         },
     )
     try:
-        return urllib.request.urlopen(request, timeout=timeout)
+        return urllib.request.urlopen(request, timeout=timeout)  # nosec B310 -- HTTPS validated above
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise ValueError(f"network request failed for {url}: {exc}") from exc
 
@@ -108,7 +110,6 @@ def fetch_npm_version_metadata(
         version=actual_version,
         tarball_url=str(dist["tarball"]),
         integrity=str(dist["integrity"]) if dist.get("integrity") else None,
-        shasum=str(dist["shasum"]) if dist.get("shasum") else None,
     )
 
 
@@ -129,16 +130,9 @@ def _verify_integrity(data: bytes, metadata: NpmVersionMetadata) -> str:
             f"integrity verification failed for {metadata.name}@{metadata.version}"
         )
 
-    if metadata.shasum:
-        actual = hashlib.sha1(data).hexdigest()
-        if not hmac.compare_digest(actual, metadata.shasum):
-            raise ValueError(
-                f"sha1 verification failed for {metadata.name}@{metadata.version}"
-            )
-        return "sha1"
-
     raise ValueError(
-        f"registry metadata for {metadata.name}@{metadata.version} has no integrity hash"
+        f"registry metadata for {metadata.name}@{metadata.version} has no supported "
+        "modern integrity hash"
     )
 
 
