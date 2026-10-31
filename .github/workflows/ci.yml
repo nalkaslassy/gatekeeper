@@ -36,6 +36,22 @@ jobs:
       - name: Run trust-drift benchmark corpus
         run: python -m gatekeeper_cli.benchmarks.run
 
+      - name: Live npm registry integration check
+        if: matrix.python-version == '3.12'
+        run: |
+          set +e
+          gatekeeper inspect npm colors --baseline 1.4.0 --candidate 1.4.1 --format json > /tmp/colors-inspect.json
+          code=$?
+          set -e
+          test "$code" -eq 1
+          python - <<'PY'
+          import json
+          data = json.load(open("/tmp/colors-inspect.json"))
+          rules = {event["rule"] for event in data["diff"]["risk_events"]}
+          assert "content-infinite-loop" in rules, rules
+          print("live colors inspection detected content-infinite-loop")
+          PY
+
       - name: Dogfood — Gatekeeper scans itself
         run: gatekeeper scan .
 
