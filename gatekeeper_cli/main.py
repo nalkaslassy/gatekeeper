@@ -31,6 +31,7 @@ from rich.table import Table
 from . import __version__
 from .content import compare_content_snapshots, scan_content_tree
 from .models import Severity
+from .npm_registry import inspect_npm_versions
 from .policy import POLICY_FILENAME, STARTER_POLICY, load_policy
 from .runner import run_scan, to_sarif, write_baseline
 from .sbom import generate_sbom
@@ -46,9 +47,11 @@ app = typer.Typer(add_completion=False, no_args_is_help=True,
 policy_app = typer.Typer(help="Manage the gatekeeper.yaml policy file.")
 trust_app = typer.Typer(help="Record and review dependency trust drift.")
 content_app = typer.Typer(help="Record and compare static package-content fingerprints.")
+inspect_app = typer.Typer(help="Opt-in online package inspection.")
 app.add_typer(policy_app, name="policy")
 app.add_typer(trust_app, name="trust")
 app.add_typer(content_app, name="content")
+app.add_typer(inspect_app, name="inspect")
 
 console = Console(stderr=False)
 err_console = Console(stderr=True, style="bold red")
@@ -259,6 +262,62 @@ def content_diff(
             f"{diff['summary']['added_files']} added, "
             f"{diff['summary']['removed_files']} removed, "
             f"{diff['summary']['changed_files']} changed"
+        )
+        if diff["risk_events"]:
+            table = Table(show_header=True, header_style="bold", title="Content drift")
+            for col in ("Severity", "Rule", "Why"):
+                table.add_column(col)
+            for event in diff["risk_events"]:
+                table.add_row(event["severity"], event["rule"], event["message"])
+            console.print(table)
+        else:
+            console.print("[green]No high-signal content drift detected.[/green]")
+    else:
+        err_console.print("error: unknown format (text|json)")
+        raise typer.Exit(2)
+
+    blocking = any(
+        event["severity"] in {"high", "critical"} for event in diff["risk_events"]
+    )
+    raise typer.Exit(1 if blocking else 0)
+
+
+@inspect_app.command("npm")
+def inspect_npm(
+    package: str = typer.Argument(..., help="npm package name, e.g. colors"),
+    baseline_version: str = typer.Option(..., "--baseline", "-b"),
+    candidate_version: str = typer.Option(..., "--candidate", "-c"),
+    registry: str = typer.Option(
+        "https://registry.npmjs.org", "--registry",
+        help="npm-compatible registry base URL",
+    ),
+    output_format: str = typer.Option("text", "--format", help="text | json"),
+) -> None:
+    """Fetch, verify, and statically compare two npm package versions."""
+    try:
+        result = inspect_npm_versions(
+            package,
+            baseline_version,
+            candidate_version,
+            registry=registry,
+        )
+    except ValueError as exc:
+        err_console.print(f"error: {exc}")
+        raise typer.Exit(2)
+
+    diff = result["diff"]
+    if output_format == "json":
+        print(json.dumps(result, indent=2))
+    elif output_format == "text":
+        console.print(
+            f"[bold]Gatekeeper npm inspection[/bold] — "
+            f"{package} {baseline_version} → {candidate_version}"
+        )
+        console.print(
+            f"Verified registry tarballs; "
+            f"{diff['summary']['added_files']} added, "
+            f"{diff['summary']['removed_files']} removed, "
+            f"{diff['summary']['changed_files']} changed file(s)."
         )
         if diff["risk_events"]:
             table = Table(show_header=True, header_style="bold", title="Content drift")

@@ -176,3 +176,70 @@ def test_content_snapshot_and_diff_cli(tmp_path):
     assert diff.exit_code == 1
     rules = {e["rule"] for e in json.loads(diff.output)["risk_events"]}
     assert "content-infinite-loop" in rules
+
+
+def test_inspect_npm_cli_uses_online_inspector(monkeypatch):
+    from gatekeeper_cli import main as main_module
+
+    monkeypatch.setattr(
+        main_module,
+        "inspect_npm_versions",
+        lambda package, baseline_version, candidate_version, registry: {
+            "package": package,
+            "baseline_version": baseline_version,
+            "candidate_version": candidate_version,
+            "registry": registry,
+            "baseline": {},
+            "candidate": {},
+            "diff": {
+                "summary": {
+                    "added_files": 0,
+                    "removed_files": 0,
+                    "changed_files": 1,
+                    "new_capabilities": 1,
+                    "risk_events": 1,
+                },
+                "added_files": [],
+                "removed_files": [],
+                "changed_files": ["lib/index.js"],
+                "new_capabilities": ["infinite-loop"],
+                "risk_events": [{
+                    "severity": "high",
+                    "rule": "content-infinite-loop",
+                    "message": "New static content capability/pattern: infinite-loop.",
+                }],
+            },
+        },
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "inspect", "npm", "colors",
+            "--baseline", "1.4.0",
+            "--candidate", "1.4.1",
+            "--format", "json",
+        ],
+    )
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["package"] == "colors"
+    assert payload["diff"]["risk_events"][0]["rule"] == "content-infinite-loop"
+
+
+def test_inspect_npm_cli_network_error_exits_two(monkeypatch):
+    from gatekeeper_cli import main as main_module
+
+    def fail(*args, **kwargs):
+        raise ValueError("network request failed")
+
+    monkeypatch.setattr(main_module, "inspect_npm_versions", fail)
+    result = runner.invoke(
+        app,
+        [
+            "inspect", "npm", "colors",
+            "--baseline", "1.4.0",
+            "--candidate", "1.4.1",
+        ],
+    )
+    assert result.exit_code == 2
