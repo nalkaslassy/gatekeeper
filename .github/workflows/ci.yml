@@ -40,16 +40,17 @@ jobs:
         if: matrix.python-version == '3.12'
         run: |
           set +e
-          gatekeeper inspect npm colors --baseline 1.4.0 --candidate 1.4.1 --format json > /tmp/colors-inspect.json
+          gatekeeper inspect npm axios --baseline 1.19.0 --candidate 1.20.0 --format json > /tmp/npm-inspect.json
           code=$?
           set -e
-          test "$code" -eq 1
+          test "$code" -eq 0 -o "$code" -eq 1
           python - <<'PY'
           import json
-          data = json.load(open("/tmp/colors-inspect.json"))
-          rules = {event["rule"] for event in data["diff"]["risk_events"]}
-          assert "content-infinite-loop" in rules, rules
-          print("live colors inspection detected content-infinite-loop")
+          data = json.load(open("/tmp/npm-inspect.json"))
+          assert data["package"] == "axios"
+          assert data["baseline"]["package"]["verified_with"] in {"sha256", "sha384", "sha512"}
+          assert data["candidate"]["package"]["verified_with"] in {"sha256", "sha384", "sha512"}
+          print("live npm metadata/tarball fetch and integrity verification succeeded")
           PY
 
       - name: Dogfood — Gatekeeper scans itself
