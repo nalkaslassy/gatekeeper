@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import io
 import json
 import posixpath
@@ -122,7 +123,7 @@ def _verify_integrity(data: bytes, metadata: NpmVersionMetadata) -> str:
                 continue
             digest = hashlib.new(algorithm, data).digest()
             actual = base64.b64encode(digest).decode()
-            if hashlib.compare_digest(actual, expected):
+            if hmac.compare_digest(actual, expected):
                 return algorithm
         raise ValueError(
             f"integrity verification failed for {metadata.name}@{metadata.version}"
@@ -130,7 +131,7 @@ def _verify_integrity(data: bytes, metadata: NpmVersionMetadata) -> str:
 
     if metadata.shasum:
         actual = hashlib.sha1(data).hexdigest()
-        if not hashlib.compare_digest(actual, metadata.shasum):
+        if not hmac.compare_digest(actual, metadata.shasum):
             raise ValueError(
                 f"sha1 verification failed for {metadata.name}@{metadata.version}"
             )
