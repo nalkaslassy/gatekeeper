@@ -55,6 +55,9 @@ tests and lints Gatekeeper's own source — see [Development](#development).)
 | `gatekeeper sbom [PATH] --output bom.cdx.json` | Generate a static CycloneDX 1.6 SBOM |
 | `gatekeeper trust snapshot [PATH]` | Record the dependency posture you currently trust |
 | `gatekeeper trust diff [PATH]` | Compare current dependencies to the committed trust snapshot |
+| `gatekeeper content snapshot PATH --output FILE` | Fingerprint an extracted package directory without executing it |
+| `gatekeeper content diff PATH --baseline FILE` | Compare extracted package content to a trusted snapshot |
+| `gatekeeper inspect npm PACKAGE --baseline VERSION --candidate VERSION` | Opt-in: fetch, verify, and statically compare two npm releases |
 | `gatekeeper policy init` / `policy validate` | Create / check `gatekeeper.yaml` |
 
 Exit codes: `0` passed · `1` blocking findings · `2` execution/config error.
@@ -160,7 +163,8 @@ What's covered today, and what still requires a human or a heavier tool:
 | CycloneDX SBOM from supported lockfiles/manifests | `gatekeeper sbom` | no | ✅ npm package-lock (v1-v3), exact requirements.txt pins, poetry.lock, uv.lock |
 | Dependency-confusion exposure for configured internal names/scopes | `dependency_confusion` | no | ✅ verifies repo config binds private npm/PyPI names to private registries; does not claim a public-name collision without an online check |
 | Runtime/dynamic analysis of install scripts (sandboxed execution) | — | — | ❌ roadmap only, see below — this is a real isolation/infra project (container runtime, syscall monitoring), not something bolted on statically |
-| Trust drift vs a previously reviewed dependency posture | `trust_drift` | no | ✅ source/integrity/install-script/direct-source/dependency-expansion changes |
+| Trust drift vs a previously reviewed dependency posture | `trust_drift` | no | ✅ source/integrity/install-script/direct-source/dependency-edge/dependency-expansion changes |
+| Static package-content drift | `content` / `inspect npm` | local: no; registry inspect: **yes** | ✅ file/hash/capability/native-binary comparison; registry mode verifies tarball integrity and never executes package code |
 | In-place compromise of an *already-baselined* dependency | `lockfile` | no | ✅ partial — the install-script finding's fingerprint includes the version, so a version bump resurfaces for review even if an older version was already accepted. This only fires when `hasInstallScript`/`requiresBuild` is the signal; a compromise that doesn't touch that flag (e.g. malicious code with no new lifecycle script) won't be caught by static lockfile parsing — `osv` may catch it if the compromised version gets a published advisory |
 
 **Python 3.10 support:** `pyproject.toml`/`poetry.lock`/`uv.lock` parsing uses
