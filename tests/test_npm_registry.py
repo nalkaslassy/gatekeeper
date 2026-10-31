@@ -10,7 +10,6 @@ import pytest
 
 from gatekeeper_cli import npm_registry
 from gatekeeper_cli.npm_registry import (
-    NpmVersionMetadata,
     files_from_npm_tarball,
     inspect_npm_versions,
 )
