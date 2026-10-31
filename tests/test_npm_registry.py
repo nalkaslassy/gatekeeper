@@ -144,3 +144,10 @@ def test_scoped_package_metadata_url_is_encoded(monkeypatch):
     monkeypatch.setattr(npm_registry, "_open", fake_open)
     npm_registry.fetch_npm_content_snapshot("@scope/pkg", "1.0.0")
     assert seen[0].endswith("/@scope%2Fpkg/1.0.0")
+
+
+def test_non_https_registry_url_is_rejected(monkeypatch):
+    with pytest.raises(ValueError, match="refusing non-HTTPS"):
+        npm_registry.fetch_npm_version_metadata(
+            "colors", "1.4.1", registry="http://registry.example"
+        )
