@@ -2,20 +2,18 @@
 
 [![CI](https://github.com/nalkaslassy/gatekeeper/actions/workflows/ci.yml/badge.svg)](https://github.com/nalkaslassy/gatekeeper/actions/workflows/ci.yml)
 
-Validate code for correctness, quality, and supply-chain security — before it merges.
+**Detect security-relevant dependency trust drift before merge.**
 
-Gatekeeper runs lint, SAST, secret scanning, and dependency/lockfile analysis
-against your repo, compares results to a committed baseline, and fails only on
-**new** findings above your policy threshold. Supply-chain checks (missing
-lockfiles across npm/yarn/pnpm, install scripts, unpinned dependencies across
-`requirements.txt`/`pyproject.toml`/`poetry.lock`/`uv.lock`, typosquat package
-names including scoped npm packages, and configured internal-name registry
-binding checks for dependency-confusion exposure) run from pure static parsing —
-no network, no code execution. An opt-in `osv` analyzer adds known-CVE and
-known-malicious-package lookup via OSV.dev for repos willing to trade that one
-static-first guarantee for broader coverage. See
-[Supply-chain coverage](#supply-chain-coverage) for exactly what is and isn't
-caught.
+Gatekeeper answers one focused question: **what became less trustworthy in this
+dependency update?** It compares the dependency state a team previously reviewed
+with the candidate state and surfaces meaningful trust deltas: integrity/source
+changes, install behavior, required dependency edges, graph expansion, and
+static package-content capabilities. The default review is offline; npm package
+content retrieval is explicit and opt-in.
+
+Gatekeeper still includes baseline-aware SAST, secret scanning, lockfile checks,
+dependency-confusion checks, SBOM generation, and optional OSV lookup, but those
+are supporting controls rather than the product's core identity.
 
 ## Quickstart (60 seconds)
 
@@ -24,7 +22,8 @@ pip install "gatekeeper-cli[analyzers]"
 
 cd your-repo
 gatekeeper policy init .        # writes gatekeeper.yaml — commit it
-gatekeeper scan .               # exit 0 = pass, 1 = blocking findings
+gatekeeper trust snapshot .     # establish reviewed dependency state; commit it
+gatekeeper review .             # PASS / REVIEW / BLOCK, offline by default
 ```
 
 Adopting on a codebase with existing debt? Record it, then block only regressions:
@@ -47,7 +46,9 @@ tests and lints Gatekeeper's own source — see [Development](#development).)
 
 | Command | Purpose |
 |---|---|
-| `gatekeeper scan [PATH]` | Run analyzers, print report, exit 0/1/2 |
+| `gatekeeper review [PATH]` | Unified dependency trust decision: PASS / REVIEW / BLOCK |
+| `gatekeeper review [PATH] --online-content` | Also fetch/verify changed npm releases and include content drift |
+| `gatekeeper scan [PATH]` | Run supporting analyzers, print report, exit 0/1/2 |
 | `gatekeeper scan --format json\|sarif --output FILE` | Machine-readable reports |
 | `gatekeeper scan --fail-on medium` | Override the policy threshold |
 | `gatekeeper scan --analyzers lockfile,bandit` | Run a subset |
@@ -113,11 +114,22 @@ gatekeeper trust snapshot .
 git add .gatekeeper-trust.json
 ```
 
-Then review future changes:
+Then use the unified review workflow:
 
 ```bash
-gatekeeper trust diff .
+gatekeeper review .
 ```
+
+`review` automatically compares the committed trust snapshot with the current
+dependency state and produces one decision:
+
+- **PASS** — no security-relevant trust drift.
+- **REVIEW** — non-blocking low/medium trust changes deserve human attention.
+- **BLOCK** — high/critical trust drift should fail the gate.
+
+For changed npm versions, add `--online-content` to fetch the two published
+tarballs over HTTPS, verify modern registry integrity, and include static
+package-content drift. Normal review remains offline.
 
 The current engine records package identity/version, direct-vs-transitive status,
 source type/URL, integrity hash when the lockfile provides one, install-script
