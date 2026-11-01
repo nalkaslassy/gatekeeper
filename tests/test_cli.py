@@ -243,3 +243,36 @@ def test_inspect_npm_cli_network_error_exits_two(monkeypatch):
         ],
     )
     assert result.exit_code == 2
+
+
+def test_review_cli_passes_unchanged_repo(fixture_repo):
+    repo = fixture_repo("clean")
+    snap = runner.invoke(app, ["trust", "snapshot", str(repo)])
+    assert snap.exit_code == 0
+
+    result = runner.invoke(app, ["review", str(repo), "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["decision"] == "pass"
+
+
+def test_review_cli_blocks_high_trust_drift(fixture_repo):
+    repo = fixture_repo("clean")
+    snap = runner.invoke(app, ["trust", "snapshot", str(repo)])
+    assert snap.exit_code == 0
+
+    lock_path = repo / "package-lock.json"
+    lock = json.loads(lock_path.read_text())
+    lock["packages"]["node_modules/left-pad"]["hasInstallScript"] = True
+    lock_path.write_text(json.dumps(lock))
+
+    result = runner.invoke(app, ["review", str(repo), "--format", "json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["decision"] == "block"
+
+
+def test_review_cli_without_snapshot_exits_two(fixture_repo):
+    repo = fixture_repo("clean")
+    result = runner.invoke(app, ["review", str(repo)])
+    assert result.exit_code == 2
