@@ -33,6 +33,7 @@ from .content import compare_content_snapshots, scan_content_tree
 from .models import Severity
 from .npm_registry import inspect_npm_versions
 from .policy import POLICY_FILENAME, STARTER_POLICY, load_policy
+from .review import review_repository
 from .runner import run_scan, to_sarif, write_baseline
 from .sbom import generate_sbom
 from .trust import (
@@ -100,6 +101,82 @@ def scan(
         print(rendered)
 
     raise typer.Exit(0 if result["verdict"] == "passed" else 1)
+
+
+@app.command()
+def review(
+    path: Path = typer.Argument(Path("."), exists=True, file_okay=False),
+    online_content: bool = typer.Option(
+        False,
+        "--online-content",
+        help="Fetch changed npm releases and include static package-content drift.",
+    ),
+    registry: str = typer.Option(
+        "https://registry.npmjs.org",
+        "--registry",
+        help="npm-compatible registry used only with --online-content",
+    ),
+    output_format: str = typer.Option("text", "--format", help="text | json"),
+) -> None:
+    """Review dependency trust changes and return PASS / REVIEW / BLOCK."""
+    try:
+        result = review_repository(
+            path.resolve(),
+            online_content=online_content,
+            registry=registry,
+        )
+    except ValueError as exc:
+        err_console.print(f"error: {exc}")
+        raise typer.Exit(2)
+
+    if output_format == "json":
+        print(json.dumps(result, indent=2))
+    elif output_format == "text":
+        summary = result["summary"]
+        console.print(
+            f"[bold]Gatekeeper review[/bold] — "
+            f"{summary['packages_changed']} changed, "
+            f"{summary['packages_added']} added, "
+            f"{summary['packages_removed']} removed package(s)"
+        )
+        console.print(
+            f"Mode: {result['mode']}   "
+            f"Content checks: {summary['content_checks']}"
+        )
+        if result["events"]:
+            table = Table(show_header=True, header_style="bold", title="Trust delta")
+            for col in ("Severity", "Package", "Source", "Rule", "Why"):
+                table.add_column(col)
+            for event in result["events"]:
+                package = (
+                    f"{event.get('ecosystem')}:{event.get('package')}"
+                    if event.get("package") else "-"
+                )
+                table.add_row(
+                    str(event.get("severity") or ""),
+                    package,
+                    str(event.get("source") or ""),
+                    str(event.get("rule") or ""),
+                    str(event.get("message") or ""),
+                )
+            console.print(table)
+        else:
+            console.print("[green]No security-relevant dependency trust drift.[/green]")
+
+        decision = result["decision"]
+        if decision == "pass":
+            console.print("[bold green]TRUST DECISION: PASS[/bold green]")
+        elif decision == "review":
+            console.print("[bold yellow]TRUST DECISION: REVIEW[/bold yellow]")
+        else:
+            console.print("[bold red]TRUST DECISION: BLOCK[/bold red]")
+    else:
+        err_console.print("error: unknown format (text|json)")
+        raise typer.Exit(2)
+
+    # REVIEW is non-blocking by default: it is a human-review signal, while
+    # BLOCK is the policy gate. Execution/config failures use exit 2 above.
+    raise typer.Exit(1 if result["decision"] == "block" else 0)
 
 
 @app.command()
