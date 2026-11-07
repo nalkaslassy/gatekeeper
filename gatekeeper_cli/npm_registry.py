@@ -63,7 +63,7 @@ def _open(url: str, *, timeout: int) -> Any:
         url,
         headers={
             "Accept": "application/json, application/octet-stream",
-            "User-Agent": "gatekeeper-cli",
+            "User-Agent": "gatekeeper-trust-drift",
         },
     )
     try:
