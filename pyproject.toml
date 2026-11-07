@@ -28,7 +28,7 @@ gatekeeper = "gatekeeper_cli.main:app"
 
 [project.optional-dependencies]
 analyzers = ["ruff>=0.4", "bandit>=1.7"]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "build>=1.2"]
 
 [build-system]
 requires = ["setuptools>=68"]
