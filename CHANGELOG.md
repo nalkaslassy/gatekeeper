@@ -2,32 +2,36 @@
 
 All notable changes to Gatekeeper are documented here.
 
-The format follows Keep a Changelog principles and the project uses semantic
-versioning for published releases.
+The project follows semantic versioning for published releases. No public
+Gatekeeper release has been published yet; the first intended release is
+`v0.1.0`.
 
 ## [Unreleased]
 
 ### Added
 - Unified `gatekeeper review` workflow that combines trust drift and optional npm content drift into one PASS / REVIEW / BLOCK decision.
-- Opt-in `gatekeeper inspect npm` registry workflow that fetches two npm releases, verifies registry integrity, safely parses tarballs in memory, and runs static content drift without installing or executing package code.
-- Static package-content fingerprinting and drift detection with content snapshot/diff CLI, including high-signal patterns such as infinite loops, dynamic code execution, subprocess use, environment access, network access, filesystem writes, encoded blobs, and newly introduced native binaries.
-- Required dependency-edge drift detection, improving historical event-stream coverage without flagging optional dependency churn in the existing benign corpus.
-- Historical supply-chain incident benchmark covering eslint-scope, ua-parser-js, event-stream, and colors with explicit detections and misses.
-- Deterministic trust-drift benchmark corpus with benign public-release transitions, controlled security-drift cases, machine-readable results, and CI enforcement.
+- Root GitHub Action focused on dependency trust review and GitHub job summaries.
+- Opt-in `gatekeeper inspect npm` registry workflow that verifies modern integrity, safely parses tarballs in memory, and runs static content drift without installing or executing package code.
+- Static package-content fingerprinting and drift detection for high-signal capability changes and newly introduced native binaries.
+- Required dependency-edge drift detection.
+- Historical supply-chain incident benchmark covering eslint-scope, ua-parser-js, event-stream, and colors.
+- Deterministic trust-drift benchmark corpus with benign public-release transitions and controlled security-drift cases.
 - Change-aware dependency trust snapshots with `gatekeeper trust snapshot`.
-- Trust-drift review with `gatekeeper trust diff` and automatic scan findings for integrity, source, install-script, non-registry-source, and dependency-graph changes.
 - CycloneDX 1.6 SBOM generation with `gatekeeper sbom`.
-- Release-readiness and adoption evidence documentation.
+- Contributor, security-reporting, issue, pull-request, and public-launch documentation.
+- Release workflow that validates distributions, publishes through PyPI Trusted Publishing, and creates a GitHub Release.
 
-## [0.1.0] - 2026-07-06
+### Changed
+- Python distribution renamed from the unavailable `gatekeeper-cli` name to `gatekeeper-trust-drift`; the executable remains `gatekeeper`.
+- Trust snapshots now preserve npm lockfile locators so multiple installed versions/instances of the same package are compared independently instead of being collapsed by package name.
+- README and design documentation now center the dependency trust-delta model and explicitly keep broad DevSecOps/platform features out of near-term scope.
+- CI now builds and smoke-tests the release wheel before launch.
 
-### Added
+### Initial implementation
 - Policy-driven CLI scans with baseline-aware pass/fail behavior.
 - Ruff, Bandit, and optional gitleaks analyzers.
 - Static npm/pnpm/Python lockfile and manifest analysis.
-- Install-script, missing-lockfile, and unpinned-dependency detection.
-- Offline typosquat detection, including scoped npm package handling.
-- Opt-in OSV vulnerability and known-malicious-package lookup.
-- JSON and SARIF output for GitHub Code Scanning.
-- GitHub Actions integration and self-scanning CI.
-- PyPI Trusted Publishing release workflow.
+- Install-script, missing-lockfile, unpinned-dependency, typosquat, and dependency-confusion checks.
+- Optional OSV vulnerability and known-malicious-package lookup.
+- JSON and SARIF output for supporting GitHub Code Scanning workflows.
+- Self-scanning CI on Python 3.10 and 3.12.

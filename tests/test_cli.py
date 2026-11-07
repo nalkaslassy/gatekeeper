@@ -117,7 +117,7 @@ def test_policy_validate_invalid(fixture_repo):
 def test_version_command():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "gatekeeper-cli" in result.output
+    assert "gatekeeper " in result.output
 
 
 def test_trust_snapshot_and_diff_cli(fixture_repo):

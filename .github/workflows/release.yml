@@ -19,10 +19,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tooling
-        run: pip install build
+        run: pip install build twine
 
       - name: Build sdist and wheel
         run: python -m build
+
+      - name: Validate distributions
+        run: twine check dist/*
 
       - uses: actions/upload-artifact@v4
         with:
@@ -34,9 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/gatekeeper-cli/
+      url: https://pypi.org/project/gatekeeper-trust-drift/
     permissions:
-      id-token: write  # required for PyPI Trusted Publishing (OIDC) — no API token stored
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -45,3 +48,19 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --generate-notes

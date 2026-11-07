@@ -1,0 +1,41 @@
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Gatekeeper version
+      placeholder: "gatekeeper 0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include commands and a minimal manifest/lockfile when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Gatekeeper output
+      render: shell
+  - type: dropdown
+    id: decision
+    attributes:
+      label: Was the PASS / REVIEW / BLOCK decision affected?
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true

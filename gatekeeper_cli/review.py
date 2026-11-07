@@ -70,9 +70,11 @@ def review_repository(
         ecosystem = change.get("ecosystem")
         name = change.get("name")
 
+        locator = change.get("locator")
         item: dict[str, Any] = {
             "ecosystem": ecosystem,
             "package": name,
+            "locator": locator,
             "before_version": before,
             "after_version": after,
             "content_checked": False,
@@ -105,6 +107,7 @@ def review_repository(
                     "source": "content",
                     "ecosystem": "npm",
                     "package": name,
+                    "locator": locator,
                     "version": after,
                 }
                 for event in inspection["diff"]["risk_events"]
@@ -120,6 +123,7 @@ def review_repository(
             -_SEVERITY_ORDER.get(str(event.get("severity")), 0),
             str(event.get("ecosystem") or ""),
             str(event.get("package") or ""),
+            str(event.get("locator") or ""),
             str(event.get("rule") or ""),
         )
     )

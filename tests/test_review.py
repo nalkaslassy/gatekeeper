@@ -121,6 +121,12 @@ def test_online_content_reviews_changed_npm_version(tmp_path):
         ("demo", "1.0.0", "1.1.0", "https://registry.npmjs.org")
     ]
     assert result["summary"]["content_checks"] == 1
+    assert result["packages"][0]["locator"] == "node_modules/demo"
+    content_event = next(
+        e for e in result["events"]
+        if e["rule"] == "content-subprocess-execution"
+    )
+    assert content_event["locator"] == "node_modules/demo"
     assert result["decision"] == "block"
     assert "content-subprocess-execution" in {
         e["rule"] for e in result["events"]

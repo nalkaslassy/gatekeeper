@@ -9,6 +9,7 @@ possible.
 | Date | Event | Evidence |
 |---|---|---|
 | 2026-10-30 | Release-readiness work resumed | Git history / pull request |
+| 2026-11-07 | Launch hardening: duplicate-package correctness, distribution rename, root Action, packaging smoke test | Git history / launch-hardening pull request |
 
 ## Adoption evidence
 
