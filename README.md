@@ -18,7 +18,7 @@ are supporting controls rather than the product's core identity.
 ## Quickstart (60 seconds)
 
 ```bash
-pip install "gatekeeper-cli[analyzers]"
+pip install "gatekeeper-trust-drift[analyzers]"
 
 cd your-repo
 gatekeeper policy init .        # writes gatekeeper.yaml — commit it
@@ -36,11 +36,23 @@ gatekeeper scan .               # now fails on new findings + risky trust drift
 
 ## CI (GitHub Actions)
 
-Copy `action/example-workflow.yml` to `.github/workflows/gatekeeper.yml` in
-*your* repo to have Gatekeeper scan it. PRs get a required status check, and
-findings land in the repo's **Security → Code scanning** tab via SARIF.
-(This is separate from `.github/workflows/ci.yml` in *this* repo, which
-tests and lints Gatekeeper's own source — see [Development](#development).)
+Gatekeeper ships a root composite Action focused on the trust-review workflow.
+After committing `.gatekeeper-trust.json`, a pull request can be gated with:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: nalkaslassy/gatekeeper@v0.1.0
+  with:
+    version: "0.1.0"
+    online-content: "false"
+```
+
+The Action writes a PASS / REVIEW / BLOCK summary into the GitHub job summary and
+exposes the JSON review report as an output path. Set `online-content: "true"`
+only when npm registry-backed content comparison is desired.
+
+`gatekeeper scan --format sarif` remains available as a supporting workflow for
+GitHub Code Scanning, but SARIF is not required for the core dependency trust gate.
 
 ## Commands
 
@@ -64,6 +76,18 @@ tests and lints Gatekeeper's own source — see [Development](#development).)
 Exit codes: `0` passed · `1` blocking findings · `2` execution/config error.
 A crashed or missing *required* analyzer is a failure — Gatekeeper fails
 closed, never open.
+
+## Why Gatekeeper
+
+Most dependency tools answer **"is this package known to be vulnerable or risky?"**
+Gatekeeper focuses on a different review question:
+
+> **What security assumptions changed between the dependency state we already
+> trusted and the state this pull request wants us to trust?**
+
+That makes version-to-version **trust delta** the primary output rather than a
+generic package score. CVE lookup, SAST, SBOM generation, and other checks remain
+complementary controls.
 
 ## Policy (`gatekeeper.yaml`)
 
@@ -133,7 +157,7 @@ package-content drift. Normal review remains offline.
 
 The current engine records package identity/version, direct-vs-transitive status,
 source type/URL, integrity hash when the lockfile provides one, install-script
-state, and dependency-count metadata when available. High-signal drift includes:
+state, dependency-count metadata, required dependency edges, and a stable npm lockfile locator so multiple installed versions of the same package are compared independently. High-signal drift includes:
 
 - integrity changing without a version change (critical),
 - package source/source type changing,
@@ -174,7 +198,7 @@ What's covered today, and what still requires a human or a heavier tool:
 | Known-malicious package versions | `osv` (opt-in) | **yes**, OSV.dev | ✅ when enabled — OSV ingests the OpenSSF malicious-packages feed as `MAL-*` advisories |
 | CycloneDX SBOM from supported lockfiles/manifests | `gatekeeper sbom` | no | ✅ npm package-lock (v1-v3), exact requirements.txt pins, poetry.lock, uv.lock |
 | Dependency-confusion exposure for configured internal names/scopes | `dependency_confusion` | no | ✅ verifies repo config binds private npm/PyPI names to private registries; does not claim a public-name collision without an online check |
-| Runtime/dynamic analysis of install scripts (sandboxed execution) | — | — | ❌ roadmap only, see below — this is a real isolation/infra project (container runtime, syscall monitoring), not something bolted on statically |
+| Runtime/dynamic execution of dependency code | — | — | ❌ deliberately out of scope for the current product; Gatekeeper stays static-first |
 | Trust drift vs a previously reviewed dependency posture | `trust_drift` | no | ✅ source/integrity/install-script/direct-source/dependency-edge/dependency-expansion changes |
 | Static package-content drift | `content` / `inspect npm` | local: no; registry inspect: **yes** | ✅ file/hash/capability/native-binary comparison; registry mode verifies tarball integrity and never executes package code |
 | In-place compromise of an *already-baselined* dependency | `lockfile` | no | ✅ partial — the install-script finding's fingerprint includes the version, so a version bump resurfaces for review even if an older version was already accepted. This only fires when `hasInstallScript`/`requiresBuild` is the signal; a compromise that doesn't touch that flag (e.g. malicious code with no new lifecycle script) won't be caught by static lockfile parsing — `osv` may catch it if the compromised version gets a published advisory |
@@ -193,7 +217,7 @@ is. This repo's own `pyproject.toml` gets flagged by its own rule as a result.
 Implemented as specified; loosen `supply_chain.unpinned_python_deps` or add a
 `typosquat_allow`-style exclusion if that's too noisy for a library project.
 
-`osv` is opt-in and off by default specifically because it's the only analyzer here that leaves the machine: enable it with `analyzers: { osv: { enabled: true, required: false } }`. `required: false` is recommended so an OSV.dev outage doesn't fail CI closed for a best-effort network check.
+`osv` is opt-in and off by default because it makes network requests. `gatekeeper review --online-content` is the other explicit networked path. Normal `review`, trust snapshots, lockfile analysis, dependency-confusion checks, and local content analysis remain offline.
 
 ## Design principles
 
@@ -205,8 +229,7 @@ Implemented as specified; loosen `supply_chain.unpinned_python_deps` or add a
   disabled by default precisely because it breaks this rule.
 - **Baseline, don't bankrupt.** Legacy debt is recorded and visible; only
   regressions block.
-- **Minimal, pinned dependencies.** Three runtime deps (typer, rich, pyyaml);
-  analyzer tools are optional extras.
+- **Minimal runtime surface.** Typer, Rich, and PyYAML are the primary runtime dependencies; analyzer tools are optional extras.
 
 ## Development
 
@@ -229,12 +252,18 @@ via [Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC —
 no API token stored in the repo) whenever a `v*` tag is pushed. It has never
 been run; see the one-time PyPI setup this needs before the first release.
 
-## Roadmap
+## Near-term roadmap
 
-Server mode with sandboxed test execution (rootless Docker → gVisor →
-Firecracker path) — a real isolation/infra project, intentionally not
-attempted as a bolt-on to the static analyzers — plus dependency-confusion
-optional online confirmation of public registry name collisions, Verdaccio registry mirroring with `npm ci --ignore-scripts`, and an
-MCP server so agents can query scan results. Static dependency-confusion exposure checks and CycloneDX SBOM generation
-is available today via `gatekeeper sbom`.
-See `docs/design.md` for the full architecture.
+Gatekeeper is intentionally feature-frozen around dependency trust drift while the
+project validates real-world usefulness. Near-term work is limited to:
+
+- expand the benign-upgrade benchmark and measure alert/false-positive rates;
+- reconstruct more historical supply-chain incidents, including misses;
+- improve npm/pnpm/Yarn coverage only when real users request it;
+- gather external adoption evidence, issues, and independent reviews;
+- evaluate publisher/provenance drift only if it strengthens the same trust model.
+
+General-purpose dashboards, license platforms, broad CVE replacement, dynamic
+malware sandboxes, and large DevSecOps control planes are out of scope for now.
+
+See `docs/design.md` for the focused architecture and scope.
