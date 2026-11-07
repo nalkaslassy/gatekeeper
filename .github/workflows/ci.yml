@@ -33,6 +33,17 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      - name: Build distribution
+        if: matrix.python-version == '3.12'
+        run: python -m build
+
+      - name: Smoke-test built wheel
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m venv /tmp/gatekeeper-wheel
+          /tmp/gatekeeper-wheel/bin/pip install dist/*.whl
+          /tmp/gatekeeper-wheel/bin/gatekeeper version
+
       - name: Run trust-drift benchmark corpus
         run: python -m gatekeeper_cli.benchmarks.run
 
