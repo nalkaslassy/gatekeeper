@@ -165,3 +165,113 @@ def test_old_snapshots_without_required_dependencies_remain_compatible():
     assert "required-dependency-added" not in {
         e["rule"] for e in diff["risk_events"]
     }
+
+
+def test_duplicate_npm_package_instances_are_not_collapsed(tmp_path):
+    (tmp_path / "package.json").write_text(json.dumps({
+        "dependencies": {"foo": "1.0.0", "parent": "1.0.0"}
+    }))
+    (tmp_path / "package-lock.json").write_text(json.dumps({
+        "name": "demo",
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"name": "demo"},
+            "node_modules/foo": {
+                "version": "1.0.0",
+                "integrity": "sha512-root",
+            },
+            "node_modules/parent": {
+                "version": "1.0.0",
+                "dependencies": {"foo": "2.0.0"},
+            },
+            "node_modules/parent/node_modules/foo": {
+                "version": "2.0.0",
+                "integrity": "sha512-nested",
+            },
+        },
+    }))
+
+    baseline = build_trust_snapshot(tmp_path)
+    foo_instances = [
+        p for p in baseline["packages"]
+        if p["ecosystem"] == "npm" and p["name"] == "foo"
+    ]
+    assert len(foo_instances) == 2
+    assert {p["locator"] for p in foo_instances} == {
+        "node_modules/foo",
+        "node_modules/parent/node_modules/foo",
+    }
+
+    data = json.loads((tmp_path / "package-lock.json").read_text())
+    data["packages"]["node_modules/parent/node_modules/foo"]["hasInstallScript"] = True
+    (tmp_path / "package-lock.json").write_text(json.dumps(data))
+
+    current = build_trust_snapshot(tmp_path)
+    diff = compare_trust_snapshots(baseline, current)
+
+    events = [
+        e for e in diff["risk_events"]
+        if e["rule"] == "install-script-added"
+    ]
+    assert len(events) == 1
+    assert events[0]["locator"] == "node_modules/parent/node_modules/foo"
+    assert diff["summary"]["package_count_before"] == 3
+    assert diff["summary"]["package_count_after"] == 3
+
+
+def test_duplicate_package_version_change_matches_by_locator(tmp_path):
+    (tmp_path / "package.json").write_text(json.dumps({
+        "dependencies": {"foo": "1.0.0", "parent": "1.0.0"}
+    }))
+    lock = {
+        "name": "demo",
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"name": "demo"},
+            "node_modules/foo": {"version": "1.0.0"},
+            "node_modules/parent": {
+                "version": "1.0.0",
+                "dependencies": {"foo": "2.0.0"},
+            },
+            "node_modules/parent/node_modules/foo": {"version": "2.0.0"},
+        },
+    }
+    (tmp_path / "package-lock.json").write_text(json.dumps(lock))
+    baseline = build_trust_snapshot(tmp_path)
+
+    lock["packages"]["node_modules/foo"]["version"] = "1.1.0"
+    (tmp_path / "package-lock.json").write_text(json.dumps(lock))
+    current = build_trust_snapshot(tmp_path)
+
+    diff = compare_trust_snapshots(baseline, current)
+    foo_changes = [
+        change for change in diff["changed"]
+        if change["name"] == "foo"
+    ]
+    assert len(foo_changes) == 1
+    assert foo_changes[0]["locator"] == "node_modules/foo"
+    assert foo_changes[0]["before_version"] == "1.0.0"
+    assert foo_changes[0]["after_version"] == "1.1.0"
+
+
+def test_legacy_singleton_snapshot_without_locator_still_matches():
+    old = {
+        "schema_version": 1,
+        "generated_at": "old",
+        "summary": {"package_count": 1},
+        "packages": [{
+            "ecosystem": "npm", "name": "x", "version": "1.0.0",
+            "direct": True, "source": None, "source_kind": "registry",
+            "integrity": None, "install_script": False,
+            "dependency_count": 0, "required_dependencies": [],
+        }],
+    }
+    new = json.loads(json.dumps(old))
+    new["generated_at"] = "new"
+    new["packages"][0]["locator"] = "node_modules/x"
+    new["packages"][0]["version"] = "1.1.0"
+
+    diff = compare_trust_snapshots(old, new)
+    assert len(diff["changed"]) == 1
+    assert diff["changed"][0]["before_version"] == "1.0.0"
+    assert diff["changed"][0]["after_version"] == "1.1.0"
