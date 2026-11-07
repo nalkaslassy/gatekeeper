@@ -275,3 +275,28 @@ def test_legacy_singleton_snapshot_without_locator_still_matches():
     assert len(diff["changed"]) == 1
     assert diff["changed"][0]["before_version"] == "1.0.0"
     assert diff["changed"][0]["after_version"] == "1.1.0"
+
+
+def test_npm_v1_nested_duplicate_is_not_marked_direct(tmp_path):
+    (tmp_path / "package.json").write_text(json.dumps({
+        "dependencies": {"parent": "1.0.0"}
+    }))
+    (tmp_path / "package-lock.json").write_text(json.dumps({
+        "name": "demo",
+        "lockfileVersion": 1,
+        "dependencies": {
+            "parent": {
+                "version": "1.0.0",
+                "dependencies": {
+                    "foo": {"version": "2.0.0"}
+                },
+            }
+        },
+    }))
+
+    snap = build_trust_snapshot(tmp_path)
+    parent = _pkg(snap, "npm", "parent")
+    foo = _pkg(snap, "npm", "foo")
+    assert parent["direct"] is True
+    assert foo["direct"] is False
+    assert foo["locator"] == "node_modules/parent/node_modules/foo"
