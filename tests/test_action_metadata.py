@@ -13,6 +13,6 @@ def test_root_action_is_focused_on_trust_review():
     steps = action["runs"]["steps"]
     combined = "\n".join(str(step) for step in steps)
     assert "gatekeeper-trust-drift" in combined
-    assert "gatekeeper review" in combined
+    assert 'bin/gatekeeper" review' in combined
     assert "gatekeeper scan" not in combined
     assert not Path("action/action.yml").exists()
