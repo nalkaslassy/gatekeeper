@@ -1,0 +1,24 @@
+name: Trust-drift improvement
+description: Propose a focused improvement to dependency trust review
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Security or review problem
+      description: What dependency trust decision is difficult or inaccurate today?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link a real incident, benign false positive, benchmark gap, or user workflow if possible.
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: How would this strengthen the trust-delta model without becoming a generic security feature?
+    validations:
+      required: true
