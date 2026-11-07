@@ -119,7 +119,7 @@ def generate_sbom(repo: Path) -> dict:
             "tools": {
                 "components": [{
                     "type": "application",
-                    "name": "gatekeeper-cli",
+                    "name": "gatekeeper-trust-drift",
                 }]
             },
         },
