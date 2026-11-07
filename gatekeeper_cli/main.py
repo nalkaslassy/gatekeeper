@@ -145,7 +145,7 @@ def review(
         )
         if result["events"]:
             table = Table(show_header=True, header_style="bold", title="Trust delta")
-            for col in ("Severity", "Package", "Source", "Rule", "Why"):
+            for col in ("Severity", "Package", "Locator", "Source", "Rule", "Why"):
                 table.add_column(col)
             for event in result["events"]:
                 package = (
@@ -155,6 +155,7 @@ def review(
                 table.add_row(
                     str(event.get("severity") or ""),
                     package,
+                    str(event.get("locator") or "-"),
                     str(event.get("source") or ""),
                     str(event.get("rule") or ""),
                     str(event.get("message") or ""),
