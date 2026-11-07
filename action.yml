@@ -32,9 +32,12 @@ runs:
       with:
         python-version: "3.12"
 
-    - name: Install Gatekeeper
+    - name: Install Gatekeeper in isolated environment
       shell: bash
-      run: pipx install "gatekeeper-trust-drift[analyzers]==${{ inputs.version }}"
+      run: |
+        python -m venv "${RUNNER_TEMP}/gatekeeper"
+        "${RUNNER_TEMP}/gatekeeper/bin/python" -m pip install \
+          "gatekeeper-trust-drift[analyzers]==${{ inputs.version }}"
 
     - name: Review dependency trust drift
       id: review
@@ -45,7 +48,7 @@ runs:
         if [ "${{ inputs.online-content }}" = "true" ]; then
           ARGS+=(--online-content)
         fi
-        gatekeeper review "${ARGS[@]}" > gatekeeper-review.json
+        "${RUNNER_TEMP}/gatekeeper/bin/gatekeeper" review "${ARGS[@]}" > gatekeeper-review.json
         CODE=$?
         set -e
 
