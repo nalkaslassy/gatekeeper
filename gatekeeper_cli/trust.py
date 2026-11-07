@@ -95,6 +95,7 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
             out.append({
                 "ecosystem": "npm",
                 "name": name,
+                "locator": str(pkg_path),
                 "version": str(version),
                 "direct": name in direct,
                 "source": source,
@@ -107,17 +108,27 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
         return out
 
     # npm lockfileVersion 1 fallback.
-    def walk(deps: dict[str, Any], top_level: bool = False) -> None:
+    def walk(
+        deps: dict[str, Any],
+        *,
+        parent_locator: str = "",
+        top_level: bool = False,
+    ) -> None:
         for name, meta in deps.items():
             if not isinstance(meta, dict):
                 continue
             version = meta.get("version")
+            locator = (
+                f"{parent_locator}/node_modules/{name}"
+                if parent_locator else f"node_modules/{name}"
+            )
             if version is not None:
                 source = meta.get("resolved")
                 child = meta.get("dependencies")
                 out.append({
                     "ecosystem": "npm",
                     "name": name,
+                    "locator": locator,
                     "version": str(version),
                     "direct": top_level or name in direct,
                     "source": source,
@@ -129,7 +140,7 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
                 })
             child = meta.get("dependencies")
             if isinstance(child, dict):
-                walk(child)
+                walk(child, parent_locator=locator)
 
     deps = data.get("dependencies")
     if isinstance(deps, dict):
@@ -194,6 +205,7 @@ def _python_snapshot(repo: Path) -> list[dict[str, Any]]:
         out.append({
             "ecosystem": "pypi",
             "name": name,
+            "locator": name,
             "version": str(version),
             "direct": name in direct,
             "source": source,
@@ -208,7 +220,11 @@ def _python_snapshot(repo: Path) -> list[dict[str, Any]]:
 
 def build_trust_snapshot(repo: Path) -> dict[str, Any]:
     packages = _npm_snapshot(repo) + _python_snapshot(repo)
-    packages.sort(key=lambda p: (p["ecosystem"], p["name"], p["version"]))
+    packages.sort(
+        key=lambda p: (
+            p["ecosystem"], p["name"], str(p.get("locator") or ""), p["version"]
+        )
+    )
     direct_count = sum(1 for p in packages if p["direct"])
     return {
         "schema_version": TRUST_SCHEMA_VERSION,
@@ -244,31 +260,114 @@ def load_trust_snapshot(path: Path) -> dict[str, Any]:
     return doc
 
 
-def _index(snapshot: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
-    out: dict[tuple[str, str], dict[str, Any]] = {}
+def _groups(
+    snapshot: dict[str, Any],
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    out: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for package in snapshot.get("packages", []):
         if not isinstance(package, dict):
             continue
         ecosystem = package.get("ecosystem")
         name = package.get("name")
         if ecosystem and name:
-            out[(str(ecosystem), str(name))] = package
+            out.setdefault((str(ecosystem), str(name)), []).append(package)
+    for packages in out.values():
+        packages.sort(
+            key=lambda p: (
+                str(p.get("locator") or ""),
+                str(p.get("version") or ""),
+                str(p.get("source") or ""),
+            )
+        )
     return out
+
+
+def _same_package_fingerprint(package: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        package.get("version"),
+        package.get("source_kind"),
+        package.get("source"),
+        package.get("integrity"),
+        package.get("direct"),
+    )
+
+
+def _match_group(
+    before: list[dict[str, Any]],
+    after: list[dict[str, Any]],
+) -> tuple[
+    list[tuple[dict[str, Any], dict[str, Any]]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
+    """Match duplicate package instances without collapsing them by name.
+
+    Prefer exact lockfile locators, then unchanged package fingerprints. A
+    single remaining before/after instance is paired for normal version bumps.
+    Ambiguous leftovers are reported as removed/added instead of guessing.
+    """
+    old = list(before)
+    new = list(after)
+    pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+
+    new_by_locator = {
+        str(pkg.get("locator")): pkg
+        for pkg in new
+        if pkg.get("locator") is not None
+    }
+    for pkg in list(old):
+        locator = pkg.get("locator")
+        if locator is None:
+            continue
+        match = new_by_locator.get(str(locator))
+        if match is not None and match in new:
+            pairs.append((pkg, match))
+            old.remove(pkg)
+            new.remove(match)
+
+    for pkg in list(old):
+        fingerprint = _same_package_fingerprint(pkg)
+        matches = [
+            candidate
+            for candidate in new
+            if _same_package_fingerprint(candidate) == fingerprint
+        ]
+        if len(matches) == 1:
+            match = matches[0]
+            pairs.append((pkg, match))
+            old.remove(pkg)
+            new.remove(match)
+
+    if len(old) == 1 and len(new) == 1:
+        pairs.append((old.pop(), new.pop()))
+
+    return pairs, old, new
 
 
 def compare_trust_snapshots(
     baseline: dict[str, Any],
     current: dict[str, Any],
 ) -> dict[str, Any]:
-    old = _index(baseline)
-    new = _index(current)
-    added = [new[key] for key in sorted(new.keys() - old.keys())]
-    removed = [old[key] for key in sorted(old.keys() - new.keys())]
+    old = _groups(baseline)
+    new = _groups(current)
+    added: list[dict[str, Any]] = []
+    removed: list[dict[str, Any]] = []
+    matched: list[
+        tuple[tuple[str, str], dict[str, Any], dict[str, Any]]
+    ] = []
+
+    for key in sorted(old.keys() | new.keys()):
+        pairs, old_unmatched, new_unmatched = _match_group(
+            old.get(key, []), new.get(key, [])
+        )
+        matched.extend((key, before, after) for before, after in pairs)
+        removed.extend(old_unmatched)
+        added.extend(new_unmatched)
+
     changed: list[dict[str, Any]] = []
     risk_events: list[dict[str, Any]] = []
 
-    for key in sorted(old.keys() & new.keys()):
-        before, after = old[key], new[key]
+    for key, before, after in matched:
         fields: dict[str, dict[str, Any]] = {}
         for field in (
             "version", "source", "source_kind", "integrity",
@@ -281,6 +380,9 @@ def compare_trust_snapshots(
         entry = {
             "ecosystem": key[0],
             "name": key[1],
+            "locator": after.get("locator") or before.get("locator"),
+            "before_locator": before.get("locator"),
+            "after_locator": after.get("locator"),
             "before_version": before.get("version"),
             "after_version": after.get("version"),
             "changes": fields,
@@ -358,8 +460,16 @@ def compare_trust_snapshots(
                 "New dependency executes lifecycle code during installation.",
             ))
 
-    old_total = int((baseline.get("summary") or {}).get("package_count", len(old)))
-    new_total = int((current.get("summary") or {}).get("package_count", len(new)))
+    old_total = int(
+        (baseline.get("summary") or {}).get(
+            "package_count", len(baseline.get("packages", []))
+        )
+    )
+    new_total = int(
+        (current.get("summary") or {}).get(
+            "package_count", len(current.get("packages", []))
+        )
+    )
     total_delta = new_total - old_total
     if total_delta >= 20:
         risk_events.append({
@@ -411,6 +521,7 @@ def _event(
         "rule": rule,
         "ecosystem": package.get("ecosystem"),
         "package": package.get("name"),
+        "locator": package.get("locator"),
         "version": package.get("version"),
         "message": message,
     }
