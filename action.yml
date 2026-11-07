@@ -1,0 +1,109 @@
+name: "Gatekeeper Dependency Trust Review"
+description: "Detect security-relevant dependency trust drift before merge."
+author: "Nadav"
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  path:
+    description: "Repository directory to review"
+    default: "."
+  version:
+    description: "gatekeeper-trust-drift version to install"
+    default: "0.1.0"
+  online-content:
+    description: "Fetch and verify changed npm releases for static content drift"
+    default: "false"
+
+outputs:
+  decision:
+    description: "pass, review, or block"
+    value: ${{ steps.review.outputs.decision }}
+  report-file:
+    description: "JSON trust review report"
+    value: ${{ steps.review.outputs.report_file }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install Gatekeeper
+      shell: bash
+      run: pipx install "gatekeeper-trust-drift[analyzers]==${{ inputs.version }}"
+
+    - name: Review dependency trust drift
+      id: review
+      shell: bash
+      run: |
+        set +e
+        ARGS=("${{ inputs.path }}" --format json)
+        if [ "${{ inputs.online-content }}" = "true" ]; then
+          ARGS+=(--online-content)
+        fi
+        gatekeeper review "${ARGS[@]}" > gatekeeper-review.json
+        CODE=$?
+        set -e
+
+        if [ "$CODE" -eq 2 ]; then
+          echo "Gatekeeper review could not complete." >&2
+          exit 2
+        fi
+
+        DECISION=$(python - <<'PY'
+        import json
+        with open("gatekeeper-review.json") as fh:
+            print(json.load(fh)["decision"])
+        PY
+        )
+        echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
+        echo "report_file=gatekeeper-review.json" >> "$GITHUB_OUTPUT"
+
+        python - <<'PY'
+        import json
+        import os
+
+        with open("gatekeeper-review.json") as fh:
+            data = json.load(fh)
+
+        decision = data["decision"].upper()
+        summary = data["summary"]
+        lines = [
+            f"## Gatekeeper trust decision: {decision}",
+            "",
+            f"- Changed packages: {summary['packages_changed']}",
+            f"- Added packages: {summary['packages_added']}",
+            f"- Removed packages: {summary['packages_removed']}",
+            f"- Risk events: {summary['risk_events']}",
+            f"- Content checks: {summary['content_checks']}",
+            "",
+        ]
+        if data["events"]:
+            lines.extend([
+                "| Severity | Package | Rule | Why |",
+                "|---|---|---|---|",
+            ])
+            for event in data["events"][:20]:
+                package = event.get("package") or "-"
+                ecosystem = event.get("ecosystem")
+                if ecosystem and package != "-":
+                    package = f"{ecosystem}:{package}"
+                why = str(event.get("message") or "").replace("|", "\\|")
+                lines.append(
+                    f"| {event.get('severity', '')} | {package} | "
+                    f"{event.get('rule', '')} | {why} |"
+                )
+
+        rendered = "\n".join(lines)
+        print(rendered)
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_path:
+            with open(summary_path, "a") as fh:
+                fh.write(rendered + "\n")
+        PY
+
+        exit "$CODE"
