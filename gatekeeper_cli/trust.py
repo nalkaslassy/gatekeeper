@@ -130,7 +130,7 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
                     "name": name,
                     "locator": locator,
                     "version": str(version),
-                    "direct": top_level or name in direct,
+                    "direct": top_level and name in direct,
                     "source": source,
                     "source_kind": _source_kind(source, "npm"),
                     "integrity": meta.get("integrity"),
