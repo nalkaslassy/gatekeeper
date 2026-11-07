@@ -432,7 +432,7 @@ def sbom(
 @app.command()
 def version() -> None:
     """Print the Gatekeeper CLI version."""
-    console.print(f"gatekeeper-cli {__version__}")
+    console.print(f"gatekeeper {__version__}")
 
 
 # --------------------------------------------------------------------------
