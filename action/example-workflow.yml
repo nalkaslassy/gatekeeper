@@ -1,10 +1,8 @@
-# .github/workflows/gatekeeper.yml — minimal dependency trust review.
-name: Gatekeeper
+# .github/workflows/gatekeeper.yml
+name: Dependency Trust Review
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -15,18 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Gatekeeper
-        run: pip install "gatekeeper-cli[analyzers]"
-
+      # Commit .gatekeeper-trust.json first:
+      #   gatekeeper trust snapshot .
       - name: Review dependency trust drift
-        run: gatekeeper review .
-
-      # Optional: use this instead when registry-backed package-content
-      # comparison is desired. It makes outbound HTTPS requests to npm.
-      #
-      # - name: Review dependency trust + npm content drift
-      #   run: gatekeeper review . --online-content
+        uses: nalkaslassy/gatekeeper@v0.1.0
+        with:
+          version: "0.1.0"
+          # Set true only when you want npm registry-backed content comparison.
+          online-content: "false"
