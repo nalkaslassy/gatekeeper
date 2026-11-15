@@ -106,6 +106,11 @@ def scan(
 @app.command()
 def review(
     path: Path = typer.Argument(Path("."), exists=True, file_okay=False),
+    baseline: Path | None = typer.Option(
+        None,
+        "--baseline",
+        help="Explicit trusted .gatekeeper-trust.json (for example from the PR base branch).",
+    ),
     online_content: bool = typer.Option(
         False,
         "--online-content",
@@ -122,6 +127,7 @@ def review(
     try:
         result = review_repository(
             path.resolve(),
+            baseline_path=baseline,
             online_content=online_content,
             registry=registry,
         )
