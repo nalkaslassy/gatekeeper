@@ -7,6 +7,9 @@ new product features.
 
 - [x] focused `gatekeeper review` PASS / REVIEW / BLOCK workflow
 - [x] duplicate npm package instances preserved by lockfile locator
+- [x] pull requests use the trusted base-branch snapshot rather than the candidate snapshot
+- [x] same-version integrity removal and complete source drift are detected
+- [x] npm local/link/workspace sources are classified separately
 - [x] root GitHub Action for trust review
 - [x] release workflow builds, validates, publishes to PyPI, and creates a GitHub Release
 - [x] security policy and contribution templates
