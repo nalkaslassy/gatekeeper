@@ -15,6 +15,7 @@ already reviewed and the state a pull request wants the team to trust.
 
 ```text
 Previously reviewed dependency state
+        from trusted base branch
               |
               v
        .gatekeeper-trust.json
@@ -110,10 +111,12 @@ gatekeeper review . --online-content
    package scores.
 2. **Static-first.** Never execute dependency code to decide whether it is safe.
 3. **Offline by default.** Network-dependent checks require explicit opt-in.
-4. **Fail closed when requested checks cannot complete.**
-5. **Evidence over claims.** Maintain benign transitions, controlled drift cases,
+4. **Trusted baseline boundary.** Pull requests are judged against the base
+   branch trust snapshot, not a snapshot supplied by the candidate branch.
+5. **Fail closed when requested checks cannot complete.**
+6. **Evidence over claims.** Maintain benign transitions, controlled drift cases,
    and reconstructed historical incidents; do not generalize small-corpus metrics.
-6. **Avoid feature creep.** Add new signals only when they strengthen the trust
+7. **Avoid feature creep.** Add new signals only when they strengthen the trust
    transition model or are justified by benchmark/user evidence.
 
 ## Near-term scope

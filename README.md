@@ -48,8 +48,12 @@ After committing `.gatekeeper-trust.json`, a pull request can be gated with:
 ```
 
 The Action writes a PASS / REVIEW / BLOCK summary into the GitHub job summary and
-exposes the JSON review report as an output path. Set `online-content: "true"`
-only when npm registry-backed content comparison is desired.
+exposes the JSON review report as an output path. On pull requests it fetches
+`.gatekeeper-trust.json` from the **base branch** and uses that as the trusted
+baseline, so a candidate PR cannot approve its own dependency changes by editing
+the snapshot. If the base branch has no trust snapshot, the Action fails closed.
+Set `online-content: "true"` only when npm registry-backed content comparison
+is desired.
 
 `gatekeeper scan --format sarif` remains available as a supporting workflow for
 GitHub Code Scanning, but SARIF is not required for the core dependency trust gate.
@@ -59,6 +63,7 @@ GitHub Code Scanning, but SARIF is not required for the core dependency trust ga
 | Command | Purpose |
 |---|---|
 | `gatekeeper review [PATH]` | Unified dependency trust decision: PASS / REVIEW / BLOCK |
+| `gatekeeper review [PATH] --baseline FILE` | Review against an explicit trusted snapshot (used by PR base-branch gating) |
 | `gatekeeper review [PATH] --online-content` | Also fetch/verify changed npm releases and include content drift |
 | `gatekeeper scan [PATH]` | Run supporting analyzers, print report, exit 0/1/2 |
 | `gatekeeper scan --format json\|sarif --output FILE` | Machine-readable reports |
@@ -156,11 +161,14 @@ tarballs over HTTPS, verify modern registry integrity, and include static
 package-content drift. Normal review remains offline.
 
 The current engine records package identity/version, direct-vs-transitive status,
-source type/URL, integrity hash when the lockfile provides one, install-script
-state, dependency-count metadata, required dependency edges, and a stable npm lockfile locator so multiple installed versions of the same package are compared independently. High-signal drift includes:
+source type/URL (including registry, Git, URL, local, link, and workspace
+sources), integrity hash when the lockfile provides one, install-script state,
+dependency-count metadata, required dependency edges, and a stable npm lockfile
+locator so multiple installed versions of the same package are compared
+independently. High-signal drift includes:
 
-- integrity changing without a version change (critical),
-- package source/source type changing,
+- integrity changing **or disappearing** without a version change (critical),
+- package source/source type appearing, disappearing, or changing,
 - a lifecycle install script appearing where none existed before,
 - a new direct Git/URL dependency, and
 - large dependency-graph expansion, and

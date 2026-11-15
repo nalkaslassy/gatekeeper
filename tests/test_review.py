@@ -5,7 +5,7 @@ import json
 import pytest
 
 from gatekeeper_cli.review import review_repository
-from gatekeeper_cli.trust import write_trust_snapshot
+from gatekeeper_cli.trust import build_trust_snapshot, write_trust_snapshot
 
 
 def test_review_passes_when_trusted_state_is_unchanged(fixture_repo):
@@ -164,3 +164,58 @@ def test_online_content_failure_fails_closed(tmp_path):
             online_content=True,
             npm_inspector=fail,
         )
+
+
+def test_explicit_trusted_baseline_ignores_candidate_snapshot_tampering(fixture_repo, tmp_path):
+    repo = fixture_repo("clean")
+    trusted = tmp_path / "trusted-main.json"
+    trusted.write_text(json.dumps(build_trust_snapshot(repo)))
+
+    lock_path = repo / "package-lock.json"
+    lock = json.loads(lock_path.read_text())
+    lock["packages"]["node_modules/left-pad"]["hasInstallScript"] = True
+    lock_path.write_text(json.dumps(lock))
+
+    # Simulate a candidate PR rewriting its own snapshot to approve the new state.
+    write_trust_snapshot(repo)
+    local_result = review_repository(repo)
+    assert local_result["decision"] == "pass"
+
+    trusted_result = review_repository(repo, baseline_path=trusted)
+    assert trusted_result["decision"] == "block"
+    assert trusted_result["baseline"] == str(trusted.resolve())
+    assert "install-script-added" in {
+        event["rule"] for event in trusted_result["events"]
+    }
+
+
+def test_online_content_skips_nonregistry_version_transition(tmp_path):
+    (tmp_path / "package.json").write_text(json.dumps({
+        "dependencies": {"demo": "file:../demo"}
+    }))
+    (tmp_path / "package-lock.json").write_text(json.dumps({
+        "name": "x",
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"name": "x"},
+            "node_modules/demo": {
+                "version": "1.0.0",
+                "resolved": "file:../demo",
+            },
+        },
+    }))
+    write_trust_snapshot(tmp_path)
+
+    data = json.loads((tmp_path / "package-lock.json").read_text())
+    data["packages"]["node_modules/demo"]["version"] = "1.1.0"
+    (tmp_path / "package-lock.json").write_text(json.dumps(data))
+
+    def should_not_run(*args, **kwargs):
+        raise AssertionError("registry inspector should not run for local sources")
+
+    result = review_repository(
+        tmp_path,
+        online_content=True,
+        npm_inspector=should_not_run,
+    )
+    assert result["summary"]["content_checks"] == 0

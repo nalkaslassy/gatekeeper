@@ -43,13 +43,16 @@ def _decision(events: list[dict[str, Any]]) -> str:
 def review_repository(
     repo: Path,
     *,
+    baseline_path: Path | None = None,
     online_content: bool = False,
     registry: str = "https://registry.npmjs.org",
     npm_inspector: Callable[..., dict[str, Any]] = inspect_npm_versions,
 ) -> dict[str, Any]:
     repo = repo.resolve()
-    trust_path = repo / TRUST_FILENAME
+    trust_path = baseline_path.resolve() if baseline_path else repo / TRUST_FILENAME
     if not trust_path.exists():
+        if baseline_path:
+            raise ValueError(f"trusted baseline not found: {trust_path}")
         raise ValueError(
             f"no {TRUST_FILENAME} found; run 'gatekeeper trust snapshot .' first"
         )
@@ -69,6 +72,8 @@ def review_repository(
         after = change.get("after_version")
         ecosystem = change.get("ecosystem")
         name = change.get("name")
+        before_source_kind = change.get("before_source_kind")
+        after_source_kind = change.get("after_source_kind")
 
         locator = change.get("locator")
         item: dict[str, Any] = {
@@ -77,6 +82,8 @@ def review_repository(
             "locator": locator,
             "before_version": before,
             "after_version": after,
+            "before_source_kind": before_source_kind,
+            "after_source_kind": after_source_kind,
             "content_checked": False,
             "content_events": [],
         }
@@ -87,6 +94,8 @@ def review_repository(
             and before
             and after
             and before != after
+            and before_source_kind == "registry"
+            and after_source_kind == "registry"
         ):
             try:
                 inspection = npm_inspector(
@@ -133,6 +142,7 @@ def review_repository(
         "decision": decision,
         "mode": "online-content" if online_content else "offline",
         "repo": str(repo),
+        "baseline": str(trust_path),
         "summary": {
             "packages_added": trust_diff["summary"]["added"],
             "packages_removed": trust_diff["summary"]["removed"],

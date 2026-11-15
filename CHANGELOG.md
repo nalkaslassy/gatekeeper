@@ -22,6 +22,9 @@ Gatekeeper release has been published yet; the first intended release is
 - Release workflow that validates distributions, publishes through PyPI Trusted Publishing, and creates a GitHub Release.
 
 ### Changed
+- Pull-request reviews now fetch and use the base branch trust snapshot, preventing candidate changes from redefining their own trusted baseline.
+- Same-version integrity removal is a critical trust-drift event, and same-version source appearance/disappearance is detected.
+- npm registry, URL, Git, local, link, and workspace sources are classified separately; registry-backed content inspection is limited to registry-to-registry version transitions.
 - Python distribution renamed from the unavailable `gatekeeper-cli` name to `gatekeeper-trust-drift`; the executable remains `gatekeeper`.
 - Trust snapshots now preserve npm lockfile locators so multiple installed versions/instances of the same package are compared independently instead of being collapsed by package name.
 - README and design documentation now center the dependency trust-delta model and explicitly keep broad DevSecOps/platform features out of near-term scope.

@@ -276,3 +276,28 @@ def test_review_cli_without_snapshot_exits_two(fixture_repo):
     repo = fixture_repo("clean")
     result = runner.invoke(app, ["review", str(repo)])
     assert result.exit_code == 2
+
+
+def test_review_cli_accepts_explicit_trusted_baseline(fixture_repo, tmp_path):
+    from gatekeeper_cli.trust import build_trust_snapshot
+
+    repo = fixture_repo("clean")
+    trusted = tmp_path / "trusted.json"
+    trusted.write_text(json.dumps(build_trust_snapshot(repo)))
+
+    lock_path = repo / "package-lock.json"
+    lock = json.loads(lock_path.read_text())
+    lock["packages"]["node_modules/left-pad"]["hasInstallScript"] = True
+    lock_path.write_text(json.dumps(lock))
+    runner.invoke(app, ["trust", "snapshot", str(repo)])
+
+    result = runner.invoke(
+        app,
+        [
+            "review", str(repo),
+            "--baseline", str(trusted),
+            "--format", "json",
+        ],
+    )
+    assert result.exit_code == 1
+    assert json.loads(result.output)["decision"] == "block"
