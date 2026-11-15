@@ -16,3 +16,12 @@ def test_root_action_is_focused_on_trust_review():
     assert 'bin/gatekeeper" review' in combined
     assert "gatekeeper scan" not in combined
     assert not Path("action/action.yml").exists()
+
+
+def test_root_action_uses_pr_base_branch_trust_snapshot():
+    combined = Path("action.yml").read_text()
+    assert "GITHUB_BASE_REF" in combined
+    assert "git fetch --no-tags --depth=1 origin" in combined
+    assert "git show \"FETCH_HEAD:" in combined
+    assert "ARGS+=(--baseline" in combined
+    assert "Commit a trust snapshot to the base branch" in combined
