@@ -29,9 +29,23 @@ _REQ_PIN_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s;]+)")
 _REQ_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 
 
-def _source_kind(source: str | None, ecosystem: str) -> str:
+def _source_kind(
+    source: str | None,
+    ecosystem: str,
+    *,
+    link: bool = False,
+    version: str | None = None,
+) -> str:
+    if ecosystem == "npm":
+        version_value = (version or "").lower()
+        if version_value.startswith("workspace:"):
+            return "workspace"
+        if link:
+            return "link"
+
     if not source:
         return "registry"
+
     value = source.lower()
     if value.startswith(("git+", "git://", "git@", "github:", "gitlab:", "bitbucket:")):
         return "git"
@@ -39,7 +53,9 @@ def _source_kind(source: str | None, ecosystem: str) -> str:
         return "registry"
     if ecosystem == "pypi" and ("pypi.org" in value or "pythonhosted.org" in value):
         return "registry"
-    if value.startswith(("http://", "https://", "file:", "../", "./", "/")):
+    if value.startswith(("file:", "../", "./", "/")):
+        return "local"
+    if value.startswith(("http://", "https://")):
         return "url"
     return "other"
 
@@ -99,7 +115,12 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
                 "version": str(version),
                 "direct": name in direct,
                 "source": source,
-                "source_kind": _source_kind(source, "npm"),
+                "source_kind": _source_kind(
+                    source,
+                    "npm",
+                    link=bool(meta.get("link", False)),
+                    version=str(version),
+                ),
                 "integrity": meta.get("integrity"),
                 "install_script": bool(meta.get("hasInstallScript", False)),
                 "dependency_count": dep_count,
@@ -132,7 +153,12 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
                     "version": str(version),
                     "direct": top_level and name in direct,
                     "source": source,
-                    "source_kind": _source_kind(source, "npm"),
+                    "source_kind": _source_kind(
+                        source,
+                        "npm",
+                        link=bool(meta.get("link", False)),
+                        version=str(version),
+                    ),
                     "integrity": meta.get("integrity"),
                     "install_script": None,
                     "dependency_count": len(child) if isinstance(child, dict) else 0,
@@ -400,6 +426,16 @@ def compare_trust_snapshots(
                 "Integrity hash changed without a version change; the same package "
                 "version now resolves to different bytes.",
             ))
+        elif (
+            "integrity" in fields
+            and before.get("version") == after.get("version")
+            and before.get("integrity")
+            and not after.get("integrity")
+        ):
+            risk_events.append(_event(
+                "critical", "integrity-removed-same-version", after,
+                "Integrity verification data disappeared without a version change.",
+            ))
         if "source_kind" in fields:
             risk_events.append(_event(
                 "high", "source-kind-changed", after,
@@ -409,12 +445,11 @@ def compare_trust_snapshots(
         elif (
             "source" in fields
             and before.get("version") == after.get("version")
-            and before.get("source")
-            and after.get("source")
         ):
             risk_events.append(_event(
                 "high", "source-changed-same-version", after,
-                "Package source URL changed without a version change.",
+                "Package source changed without a version change "
+                f"({before.get('source')!r} -> {after.get('source')!r}).",
             ))
         if before.get("install_script") is False and after.get("install_script") is True:
             risk_events.append(_event(
