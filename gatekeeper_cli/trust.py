@@ -96,6 +96,10 @@ def _npm_snapshot(repo: Path) -> list[dict[str, Any]]:
             if not pkg_path or not isinstance(meta, dict) or "node_modules/" not in pkg_path:
                 continue
             version = meta.get("version")
+            if version is None and meta.get("link") is True:
+                # package-lock link entries can omit a semver. Keep the linked
+                # dependency in the trust graph; source drift carries the path.
+                version = "linked"
             if version is None:
                 continue
             name = pkg_path.rsplit("node_modules/", 1)[-1]
@@ -411,6 +415,8 @@ def compare_trust_snapshots(
             "after_locator": after.get("locator"),
             "before_version": before.get("version"),
             "after_version": after.get("version"),
+            "before_source_kind": before.get("source_kind"),
+            "after_source_kind": after.get("source_kind"),
             "changes": fields,
         }
         changed.append(entry)
