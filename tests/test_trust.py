@@ -300,3 +300,98 @@ def test_npm_v1_nested_duplicate_is_not_marked_direct(tmp_path):
     assert parent["direct"] is True
     assert foo["direct"] is False
     assert foo["locator"] == "node_modules/parent/node_modules/foo"
+
+
+def test_same_version_integrity_removal_is_critical():
+    old = {
+        "schema_version": 1,
+        "generated_at": "old",
+        "summary": {"package_count": 1},
+        "packages": [{
+            "ecosystem": "npm", "name": "x", "locator": "node_modules/x",
+            "version": "1.0.0", "direct": True,
+            "source": "https://registry.npmjs.org/x/-/x-1.0.0.tgz",
+            "source_kind": "registry", "integrity": "sha512-known",
+            "install_script": False, "dependency_count": 0,
+            "required_dependencies": [],
+        }],
+    }
+    new = json.loads(json.dumps(old))
+    new["generated_at"] = "new"
+    new["packages"][0]["integrity"] = None
+
+    diff = compare_trust_snapshots(old, new)
+    event = next(
+        e for e in diff["risk_events"]
+        if e["rule"] == "integrity-removed-same-version"
+    )
+    assert event["severity"] == "critical"
+
+
+def test_same_version_source_appearance_and_disappearance_are_high():
+    old = {
+        "schema_version": 1,
+        "generated_at": "old",
+        "summary": {"package_count": 1},
+        "packages": [{
+            "ecosystem": "npm", "name": "x", "locator": "node_modules/x",
+            "version": "1.0.0", "direct": True,
+            "source": None, "source_kind": "registry",
+            "integrity": None, "install_script": False,
+            "dependency_count": 0, "required_dependencies": [],
+        }],
+    }
+    with_source = json.loads(json.dumps(old))
+    with_source["generated_at"] = "new"
+    with_source["packages"][0]["source"] = (
+        "https://registry.npmjs.org/x/-/x-1.0.0.tgz"
+    )
+
+    appeared = compare_trust_snapshots(old, with_source)
+    appeared_event = next(
+        e for e in appeared["risk_events"]
+        if e["rule"] == "source-changed-same-version"
+    )
+    assert appeared_event["severity"] == "high"
+
+    disappeared = compare_trust_snapshots(with_source, old)
+    disappeared_event = next(
+        e for e in disappeared["risk_events"]
+        if e["rule"] == "source-changed-same-version"
+    )
+    assert disappeared_event["severity"] == "high"
+
+
+def test_npm_local_link_and_workspace_sources_are_classified(tmp_path):
+    (tmp_path / "package.json").write_text(json.dumps({
+        "dependencies": {
+            "local-lib": "file:../local-lib",
+            "linked-lib": "file:packages/linked",
+            "workspace-lib": "workspace:*",
+        }
+    }))
+    (tmp_path / "package-lock.json").write_text(json.dumps({
+        "name": "demo",
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"name": "demo"},
+            "node_modules/local-lib": {
+                "version": "1.0.0",
+                "resolved": "file:../local-lib",
+            },
+            "node_modules/linked-lib": {
+                "resolved": "packages/linked",
+                "link": True,
+            },
+            "node_modules/workspace-lib": {
+                "version": "workspace:*",
+            },
+        },
+    }))
+
+    snap = build_trust_snapshot(tmp_path)
+    assert _pkg(snap, "npm", "local-lib")["source_kind"] == "local"
+    linked = _pkg(snap, "npm", "linked-lib")
+    assert linked["source_kind"] == "link"
+    assert linked["version"] == "linked"
+    assert _pkg(snap, "npm", "workspace-lib")["source_kind"] == "workspace"
