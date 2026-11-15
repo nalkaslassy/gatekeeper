@@ -5,7 +5,7 @@ import json
 import pytest
 
 from gatekeeper_cli.review import review_repository
-from gatekeeper_cli.trust import write_trust_snapshot
+from gatekeeper_cli.trust import build_trust_snapshot, write_trust_snapshot
 
 
 def test_review_passes_when_trusted_state_is_unchanged(fixture_repo):
@@ -169,10 +169,7 @@ def test_online_content_failure_fails_closed(tmp_path):
 def test_explicit_trusted_baseline_ignores_candidate_snapshot_tampering(fixture_repo, tmp_path):
     repo = fixture_repo("clean")
     trusted = tmp_path / "trusted-main.json"
-    trusted.write_text(
-        json.dumps(__import__("gatekeeper_cli.trust", fromlist=["build_trust_snapshot"])
-                   .build_trust_snapshot(repo))
-    )
+    trusted.write_text(json.dumps(build_trust_snapshot(repo)))
 
     lock_path = repo / "package-lock.json"
     lock = json.loads(lock_path.read_text())
