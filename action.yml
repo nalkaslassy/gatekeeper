@@ -45,6 +45,26 @@ runs:
       run: |
         set +e
         ARGS=("${{ inputs.path }}" --format json)
+
+        # A pull request must be judged against the trust snapshot from its
+        # trusted base branch, never a snapshot modified by the candidate PR.
+        if [ -n "${GITHUB_BASE_REF:-}" ]; then
+          git fetch --no-tags --depth=1 origin "${GITHUB_BASE_REF}"
+          BASELINE_FILE="${RUNNER_TEMP}/gatekeeper-base-trust.json"
+          REPO_PATH="${{ inputs.path }}"
+          REPO_PATH="${REPO_PATH#./}"
+          if [ "${REPO_PATH}" = "." ]; then
+            REPO_PATH=""
+          fi
+          BASELINE_OBJECT="${REPO_PATH:+${REPO_PATH}/}.gatekeeper-trust.json"
+          if ! git show "FETCH_HEAD:${BASELINE_OBJECT}" > "${BASELINE_FILE}"; then
+            echo "Gatekeeper could not read ${BASELINE_OBJECT} from base branch ${GITHUB_BASE_REF}." >&2
+            echo "Commit a trust snapshot to the base branch before enabling the PR gate." >&2
+            exit 2
+          fi
+          ARGS+=(--baseline "${BASELINE_FILE}")
+        fi
+
         if [ "${{ inputs.online-content }}" = "true" ]; then
           ARGS+=(--online-content)
         fi
