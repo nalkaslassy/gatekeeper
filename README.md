@@ -202,6 +202,11 @@ results. CI runs the corpus on every pull request and uploads the JSON result as
 an artifact. See `docs/evaluation.md` for methodology and claim limits. These
 fixed-corpus numbers are **not** universal detection or false-positive rates.
 
+A separate networked real-world evaluation workflow also runs the actual CLI
+against full, commit-pinned `package-lock.json` transitions from npm CLI, Axios,
+Undici, cookie, and Commander. It is intentionally separate from deterministic
+CI so external network availability cannot make the core suite flaky.
+
 ## Supply-chain coverage
 
 What's covered today, and what still requires a human or a heavier tool:
