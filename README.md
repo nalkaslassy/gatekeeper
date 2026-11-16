@@ -40,15 +40,16 @@ Gatekeeper ships a root composite Action focused on the trust-review workflow.
 After committing `.gatekeeper-trust.json`, a pull request can be gated with:
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
 - uses: nalkaslassy/gatekeeper@v0.1.0
   with:
     version: "0.1.0"
     online-content: "false"
 ```
 
-The Action writes a PASS / REVIEW / BLOCK summary into the GitHub job summary and
-exposes the JSON review report as an output path. On pull requests it fetches
+The Action writes a PASS / REVIEW / BLOCK summary into the GitHub job summary,
+including the lockfile locator when package names are duplicated, and exposes
+the JSON review report as an output path. On pull requests it fetches
 `.gatekeeper-trust.json` from the **base branch** and uses that as the trusted
 baseline, so a candidate PR cannot approve its own dependency changes by editing
 the snapshot. If the base branch has no trust snapshot, the Action fails closed.
@@ -57,6 +58,11 @@ is desired.
 
 `gatekeeper scan --format sarif` remains available as a supporting workflow for
 GitHub Code Scanning, but SARIF is not required for the core dependency trust gate.
+
+Gatekeeper's own executable CI/release workflows pin third-party Actions to
+immutable commit SHAs. The short examples above use release tags for readability;
+teams with strict supply-chain policies can pin those references to reviewed
+commits as well.
 
 ## Commands
 

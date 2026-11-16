@@ -28,7 +28,7 @@ runs:
   using: "composite"
   steps:
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: "3.12"
 
@@ -107,17 +107,18 @@ runs:
         ]
         if data["events"]:
             lines.extend([
-                "| Severity | Package | Rule | Why |",
-                "|---|---|---|---|",
+                "| Severity | Package | Locator | Rule | Why |",
+                "|---|---|---|---|---|",
             ])
             for event in data["events"][:20]:
                 package = event.get("package") or "-"
                 ecosystem = event.get("ecosystem")
                 if ecosystem and package != "-":
                     package = f"{ecosystem}:{package}"
+                locator = str(event.get("locator") or "-").replace("|", "\\|")
                 why = str(event.get("message") or "").replace("|", "\\|")
                 lines.append(
-                    f"| {event.get('severity', '')} | {package} | "
+                    f"| {event.get('severity', '')} | {package} | {locator} | "
                     f"{event.get('rule', '')} | {why} |"
                 )
 

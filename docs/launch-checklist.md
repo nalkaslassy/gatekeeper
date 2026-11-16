@@ -14,6 +14,9 @@ new product features.
 - [x] release workflow builds, validates, publishes to PyPI, and creates a GitHub Release
 - [x] security policy and contribution templates
 - [x] deterministic benchmark in CI
+- [x] executable GitHub Actions dependencies pinned to immutable commit SHAs
+- [x] Dependabot monitors GitHub Actions and Python development tooling weekly
+- [x] Action summaries show lockfile locators for duplicate package instances
 
 ## One-time external setup
 
