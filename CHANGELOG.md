@@ -9,6 +9,7 @@ Gatekeeper release has been published yet; the first intended release is
 ## [Unreleased]
 
 ### Added
+- Public v0.1 evaluation case study documenting full-lockfile benign results, evidence-driven noise calibration, historical detections, and the retained `data-value` miss.
 - Networked end-to-end evaluation workflow that runs Gatekeeper over full commit-pinned public package-lock transitions from five external projects.
 - Expanded deterministic evaluation corpus: 25 benign transitions, 5 controlled security-drift cases, and 10 historical npm incidents, including a retained documented miss.
 - Evaluation methodology documentation and CI-uploaded benchmark JSON artifacts.
