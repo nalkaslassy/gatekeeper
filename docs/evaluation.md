@@ -102,6 +102,23 @@ This evaluates the real CLI, parser, snapshot builder, duplicate-instance
 matching, and review decision over full public lockfiles without vendoring those
 large lockfiles into Gatekeeper.
 
+### Noise calibration from the first full-lockfile run
+
+The first five-project run produced **2 PASS / 3 REVIEW / 0 BLOCK** on ordinary
+upgrades. Every REVIEW came from `required-dependency-added` events on
+**transitive** packages (for example `flat-cache`, `keyv`, and ESLint tooling);
+none of the parent packages generating those events were direct dependencies.
+
+Gatekeeper therefore keeps required-edge additions at **medium / REVIEW** when
+the changed parent is a direct dependency, but records the same change as
+**info** when the parent is transitive. The event remains visible in JSON/text
+output without turning routine transitive graph churn into human-review work.
+
+The historical `event-stream@3.3.6` reconstruction remains a REVIEW because
+`event-stream` is the direct dependency whose required edge changed. The
+real-world matrix now expects all five ordinary upgrades to PASS and will fail
+if that noise regression returns.
+
 ## What the current corpus can support
 
 It can support statements such as:
