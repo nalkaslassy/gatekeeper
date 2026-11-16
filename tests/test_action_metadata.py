@@ -33,6 +33,7 @@ def test_executable_workflows_pin_external_actions_to_commit_shas():
         Path("action.yml"),
         Path(".github/workflows/ci.yml"),
         Path(".github/workflows/release.yml"),
+        Path(".github/workflows/real-world-eval.yml"),
     ]
     uses_pattern = re.compile(r"^\s*uses:\s*([^@\s]+)@([^\s#]+)", re.MULTILINE)
     sha_pattern = re.compile(r"^[0-9a-f]{40}$")
@@ -72,6 +73,7 @@ def test_sha_pins_keep_version_comments():
         Path("action.yml"),
         Path(".github/workflows/ci.yml"),
         Path(".github/workflows/release.yml"),
+        Path(".github/workflows/real-world-eval.yml"),
     ]
     for path in files:
         for line in path.read_text().splitlines():
@@ -87,3 +89,14 @@ def test_ci_persists_benchmark_evidence():
     assert "benchmark-results.json" in ci
     assert "gatekeeper-benchmark-results" in ci
     assert "if-no-files-found: error" in ci
+
+
+def test_real_world_evaluation_uses_immutable_external_refs():
+    workflow = Path(".github/workflows/real-world-eval.yml").read_text()
+    # Five real public package-lock transitions, each pinned to two commit SHAs.
+    assert workflow.count("repository: ") >= 5
+    refs = re.findall(r"(?:baseline_ref|candidate_ref):\s*([0-9a-f]{40})", workflow)
+    assert len(refs) == 10
+    assert len(set(refs)) == 10
+    assert "workflow_dispatch:" in workflow
+    assert "real-world-result.json" in workflow
