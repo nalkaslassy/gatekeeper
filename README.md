@@ -59,6 +59,11 @@ is desired.
 `gatekeeper scan --format sarif` remains available as a supporting workflow for
 GitHub Code Scanning, but SARIF is not required for the core dependency trust gate.
 
+Gatekeeper's own executable CI/release workflows pin third-party Actions to
+immutable commit SHAs. The short examples above use release tags for readability;
+teams with strict supply-chain policies can pin those references to reviewed
+commits as well.
+
 ## Commands
 
 | Command | Purpose |
