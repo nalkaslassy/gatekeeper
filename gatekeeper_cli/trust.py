@@ -469,8 +469,13 @@ def compare_trust_snapshots(
         if isinstance(before_required, list) and isinstance(after_required, list):
             added_required = sorted(set(after_required) - set(before_required))
             if added_required:
+                # Direct-package graph changes deserve human review. The same
+                # edge churn is common in transitive tooling upgrades, so keep
+                # it visible without turning routine dependency movement into
+                # review fatigue.
+                edge_severity = "medium" if after.get("direct") else "info"
                 risk_events.append(_event(
-                    "medium", "required-dependency-added", after,
+                    edge_severity, "required-dependency-added", after,
                     "Package added required dependency edge(s): "
                     + ", ".join(added_required[:5])
                     + (" ..." if len(added_required) > 5 else ""),

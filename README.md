@@ -178,7 +178,9 @@ independently. High-signal drift includes:
 - a lifecycle install script appearing where none existed before,
 - a new direct Git/URL dependency, and
 - large dependency-graph expansion, and
-- a previously known package adding new required dependency edges.
+- a direct dependency adding new required dependency edges (REVIEW); transitive
+  required-edge churn remains visible as informational evidence without forcing
+  human review.
 
 When a committed snapshot exists, the normal `gatekeeper scan` command runs the
 `trust_drift` analyzer automatically and emits these events as standard findings,
@@ -204,8 +206,12 @@ fixed-corpus numbers are **not** universal detection or false-positive rates.
 
 A separate networked real-world evaluation workflow also runs the actual CLI
 against full, commit-pinned `package-lock.json` transitions from npm CLI, Axios,
-Undici, cookie, and Commander. It is intentionally separate from deterministic
-CI so external network availability cannot make the core suite flaky.
+Undici, cookie, and Commander. The first run exposed transitive dependency-edge
+noise (2 PASS / 3 REVIEW / 0 BLOCK); Gatekeeper now keeps those transitive edge
+events informational while direct-edge changes still trigger REVIEW. The matrix
+expects all five ordinary upgrades to PASS. It is intentionally separate from
+deterministic CI so external network availability cannot make the core suite
+flaky.
 
 ## Supply-chain coverage
 
