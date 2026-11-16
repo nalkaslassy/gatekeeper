@@ -1,5 +1,7 @@
 name: CI
 
+# Deterministic core CI stays offline/reproducible.
+
 on:
   push:
     branches: [main]
