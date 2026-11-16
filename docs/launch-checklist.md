@@ -18,6 +18,8 @@ new product features.
 - [x] Dependabot monitors GitHub Actions and Python development tooling weekly
 - [x] Action summaries show lockfile locators for duplicate package instances
 - [x] separate end-to-end workflow validates the CLI against full commit-pinned public lockfile transitions
+- [x] CI validates wheel + sdist metadata/installability before release
+- [x] release workflow rejects tag/package-version mismatches
 
 ## One-time external setup
 
