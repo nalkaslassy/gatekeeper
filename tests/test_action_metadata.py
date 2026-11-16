@@ -103,3 +103,18 @@ def test_real_world_evaluation_uses_immutable_external_refs():
     assert "workflow_dispatch:" in workflow
     assert "branches: [main]" in workflow
     assert "real-world-result.json" in workflow
+
+
+def test_ci_validates_both_publish_artifacts():
+    ci = Path(".github/workflows/ci.yml").read_text()
+    assert "twine check dist/*" in ci
+    assert "pip install dist/*.whl" in ci
+    assert "pip install dist/*.tar.gz" in ci
+    assert 'version("gatekeeper-trust-drift") == "0.1.0"' in ci
+
+
+def test_release_refuses_tag_version_mismatch():
+    release = Path(".github/workflows/release.yml").read_text()
+    assert 'TAG_VERSION="${GITHUB_REF_NAME#v}"' in release
+    assert 'data["project"]["version"]' in release
+    assert 'Tag version $TAG_VERSION does not match pyproject version $PACKAGE_VERSION' in release

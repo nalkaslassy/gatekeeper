@@ -26,6 +26,7 @@ Gatekeeper release has been published yet; the first intended release is
 - Release workflow that validates distributions, publishes through PyPI Trusted Publishing, and creates a GitHub Release.
 
 ### Changed
+- CI now validates both wheel and source-distribution artifacts with Twine and clean-environment install smoke tests; release tags must match the package version before publishing.
 - Required dependency-edge additions remain medium/REVIEW for direct dependencies but are informational for transitive packages, based on full-lockfile evidence showing routine transitive edge churn caused review fatigue.
 - Benchmark output now reports PASS / REVIEW / BLOCK decision distributions, benign alert/block rates, historical detection/block rates, and separates full lockfile evidence from package-level release sanity cases.
 - Executable GitHub Actions dependencies are upgraded and pinned to immutable commit SHAs; Dependabot now proposes weekly GitHub Actions and Python development-tool updates.

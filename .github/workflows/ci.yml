@@ -39,12 +39,31 @@ jobs:
         if: matrix.python-version == '3.12'
         run: python -m build
 
+      - name: Validate distribution metadata
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m pip install twine
+          twine check dist/*
+
       - name: Smoke-test built wheel
         if: matrix.python-version == '3.12'
         run: |
           python -m venv /tmp/gatekeeper-wheel
           /tmp/gatekeeper-wheel/bin/pip install dist/*.whl
+          /tmp/gatekeeper-wheel/bin/python - <<'PY'
+          from importlib.metadata import metadata, version
+
+          assert version("gatekeeper-trust-drift") == "0.1.0"
+          assert metadata("gatekeeper-trust-drift")["Name"] == "gatekeeper-trust-drift"
+          PY
           /tmp/gatekeeper-wheel/bin/gatekeeper version
+
+      - name: Smoke-test built sdist
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m venv /tmp/gatekeeper-sdist
+          /tmp/gatekeeper-sdist/bin/pip install dist/*.tar.gz
+          /tmp/gatekeeper-sdist/bin/gatekeeper version
 
       - name: Run trust-drift benchmark corpus
         run: |
