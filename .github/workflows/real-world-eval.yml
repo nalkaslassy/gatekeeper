@@ -2,6 +2,14 @@ name: Real-world integration evaluation
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "gatekeeper_cli/trust.py"
+      - "gatekeeper_cli/review.py"
+      - "gatekeeper_cli/content.py"
+      - "gatekeeper_cli/benchmarks/**"
+      - ".github/workflows/real-world-eval.yml"
   pull_request:
     paths:
       - "gatekeeper_cli/trust.py"
