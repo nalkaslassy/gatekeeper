@@ -1,0 +1,108 @@
+# Gatekeeper evaluation methodology
+
+Gatekeeper is designed to answer a narrow review question:
+
+> **What became less trustworthy in this dependency update?**
+
+Evaluation therefore needs to test both sides of that question:
+
+1. **benign noise** — ordinary upgrades should usually remain PASS;
+2. **security sensitivity** — meaningful trust changes should surface as REVIEW
+   or BLOCK;
+3. **review usefulness** — the event should explain what changed rather than
+   merely label a package as risky.
+
+## Corpus layers
+
+### 1. Public lockfile transitions
+
+These are the strongest benign fixtures because they preserve a compact form of
+a real repository dependency transition. The current corpus contains two:
+`npm/cli` and `axios/axios`.
+
+### 2. Public package release transitions
+
+These verify that ordinary registry version movement is not itself treated as a
+security event. The current corpus contains 23 package-level release pairs across
+10 public projects.
+
+These are useful sanity checks, but they do not exercise graph churn,
+hoisting/rehoisting, optional dependency changes, or package-manager-specific
+lockfile behavior.
+
+### 3. Controlled trust mutations
+
+Five deterministic cases isolate the rules Gatekeeper intentionally implements:
+
+- same-version integrity mutation;
+- install script added;
+- registry-to-Git source change;
+- new direct Git dependency;
+- large dependency-graph expansion.
+
+Controlled cases test rule correctness. They are not historical compromises.
+
+### 4. Historical incident reconstructions
+
+Ten public npm incidents are represented using only facts supported by public
+incident evidence and only fields/capabilities Gatekeeper understands.
+
+The corpus intentionally keeps one current miss:
+`data-value@45.0.0`. Its malicious behavior is carried by an off-registry URL
+on a dependency edge. Gatekeeper records required edge names but does not yet
+record each edge's source specification.
+
+That miss is evidence for a possible future signal; it is **not** a reason to
+rush a feature into v0.1.
+
+## Decision metrics
+
+For each case the runner derives the same severity model used by review:
+
+- **PASS** — no modeled security-relevant drift;
+- **REVIEW** — low/medium signal requiring human attention;
+- **BLOCK** — high/critical trust drift.
+
+The key usability metrics are:
+
+- benign alert rate;
+- benign block rate;
+- historical detection rate;
+- historical block rate;
+- counts of historical REVIEW outcomes versus BLOCK outcomes.
+
+A security tool that detects incidents but reviews every ordinary upgrade is not
+useful. Conversely, a tool that always passes is quiet but not useful. Gatekeeper
+needs evidence on both dimensions.
+
+## What the current corpus can support
+
+It can support statements such as:
+
+- the deterministic corpus contains 25 benign, 5 controlled, and 10 historical
+  cases;
+- the benchmark explicitly distinguishes package-level release sanity cases from
+  lockfile-transition evidence;
+- known misses remain visible in CI;
+- every benchmark result is reproducible from checked-in fixtures.
+
+It **cannot** support claims such as:
+
+- universal 90% historical attack detection;
+- a population false-positive rate;
+- broad npm ecosystem coverage;
+- superiority over other supply-chain scanners.
+
+## Next evidence milestone
+
+Before making stronger adoption/performance claims:
+
+1. grow compact **full lockfile** benign transitions from 2 to at least 25;
+2. grow historical reconstructions from 10 to at least 20;
+3. include pnpm and Yarn transitions where the available metadata permits a fair
+   comparison;
+4. preserve misses and unsupported cases;
+5. publish a case study that shows both detections and misses.
+
+The benchmark should improve because the evidence improves, not because the
+expected labels are changed to make Gatekeeper look better.
