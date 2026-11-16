@@ -101,4 +101,5 @@ def test_real_world_evaluation_uses_immutable_external_refs():
     expected = re.findall(r"expected_decision:\s*(pass|review|block)", workflow)
     assert expected == ["pass", "review", "review", "pass", "review"]
     assert "workflow_dispatch:" in workflow
+    assert "branches: [main]" in workflow
     assert "real-world-result.json" in workflow
