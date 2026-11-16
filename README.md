@@ -204,6 +204,10 @@ results. CI runs the corpus on every pull request and uploads the JSON result as
 an artifact. See `docs/evaluation.md` for methodology and claim limits. These
 fixed-corpus numbers are **not** universal detection or false-positive rates.
 
+For a concrete walkthrough of the benign full-lockfile runs, the noise calibration,
+and the retained historical miss, see
+[`docs/case-study-v0.1-evaluation.md`](docs/case-study-v0.1-evaluation.md).
+
 A separate networked real-world evaluation workflow also runs the actual CLI
 against full, commit-pinned `package-lock.json` transitions from npm CLI, Axios,
 Undici, cookie, and Commander. The first run exposed transitive dependency-edge
