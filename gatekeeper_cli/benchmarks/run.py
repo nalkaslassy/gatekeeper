@@ -34,6 +34,7 @@ def run_benchmarks() -> dict:
     results = []
     benign = detected = missed = false_positive = 0
     benign_pass = benign_review = benign_block = 0
+    benign_lockfile_transitions = benign_package_release_transitions = 0
     security_cases = 0
     historical_cases = historical_detected = historical_missed = 0
     historical_pass = historical_review = historical_block = 0
@@ -57,6 +58,11 @@ def run_benchmarks() -> dict:
 
         if case["kind"] == "benign":
             benign += 1
+            fixture_scope = (case.get("source") or {}).get("fixture_scope")
+            if fixture_scope == "compact-public-lockfile-transition":
+                benign_lockfile_transitions += 1
+            elif fixture_scope == "package-level-release-transition":
+                benign_package_release_transitions += 1
             if observed:
                 false_positive += 1
             if decision == "pass":
@@ -123,6 +129,8 @@ def run_benchmarks() -> dict:
             "controlled_security_cases_detected": detected,
             "missed_controlled_security_cases": missed,
             "benign_cases_with_high_signal_alerts": false_positive,
+            "benign_lockfile_transition_cases": benign_lockfile_transitions,
+            "benign_package_release_transition_cases": benign_package_release_transitions,
             "benign_passes": benign_pass,
             "benign_reviews": benign_review,
             "benign_blocks": benign_block,
