@@ -98,5 +98,7 @@ def test_real_world_evaluation_uses_immutable_external_refs():
     refs = re.findall(r"(?:baseline_ref|candidate_ref):\s*([0-9a-f]{40})", workflow)
     assert len(refs) == 10
     assert len(set(refs)) == 10
+    expected = re.findall(r"expected_decision:\s*(pass|review|block)", workflow)
+    assert expected == ["pass", "review", "review", "pass", "review"]
     assert "workflow_dispatch:" in workflow
     assert "real-world-result.json" in workflow
