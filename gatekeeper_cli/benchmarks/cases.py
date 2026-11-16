@@ -460,6 +460,7 @@ def benchmark_cases() -> list[dict]:
             "kind": "benign",
             "source": {
                 "repository": "npm/cli",
+                "fixture_scope": "compact-public-lockfile-transition",
                 "from": "v12.2.0",
                 "to": "v12.2.1",
                 "observed_public_summary": {
@@ -478,6 +479,7 @@ def benchmark_cases() -> list[dict]:
             "kind": "benign",
             "source": {
                 "repository": "axios/axios",
+                "fixture_scope": "compact-public-lockfile-transition",
                 "from": "v1.19.0",
                 "to": "v1.20.0",
                 "observed_public_summary": {
