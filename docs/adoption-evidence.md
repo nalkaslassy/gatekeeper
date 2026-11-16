@@ -28,6 +28,10 @@ possible.
 
 ## Issues, pull requests, and case studies
 
+| Date | Item | Outcome | Evidence |
+|---|---|---|---|
+| 2026-11-16 | Pre-release evaluation case study | Published full-lockfile usability results, historical detections, and retained miss | `docs/case-study-v0.1-evaluation.md` |
+
 Record substantive outside issues/PRs here when they occur. For each confirmed
 adopter, capture: who adopted Gatekeeper, how it was integrated, what it found
 or prevented, and a dated link/screenshot or written confirmation.
