@@ -138,6 +138,34 @@ def test_required_dependency_edge_addition_is_medium_risk():
     assert "flatmap-stream" in event["message"]
 
 
+def test_transitive_required_dependency_edge_addition_is_informational():
+    old = {
+        "schema_version": 1,
+        "generated_at": "old",
+        "summary": {"package_count": 1},
+        "packages": [{
+            "ecosystem": "npm", "name": "flat-cache", "version": "5.0.0",
+            "direct": False, "source": None, "source_kind": "registry",
+            "integrity": None, "install_script": False,
+            "dependency_count": 1,
+            "required_dependencies": ["flatted"],
+        }],
+    }
+    new = json.loads(json.dumps(old))
+    new["generated_at"] = "new"
+    new["packages"][0]["version"] = "5.1.0"
+    new["packages"][0]["dependency_count"] = 2
+    new["packages"][0]["required_dependencies"] = ["flatted", "keyv"]
+
+    diff = compare_trust_snapshots(old, new)
+    event = next(
+        e for e in diff["risk_events"] if e["rule"] == "required-dependency-added"
+    )
+    assert event["severity"] == "info"
+    assert event["package"] == "flat-cache"
+    assert "keyv" in event["message"]
+
+
 def test_old_snapshots_without_required_dependencies_remain_compatible():
     old = {
         "schema_version": 1,
