@@ -22,6 +22,8 @@ Gatekeeper release has been published yet; the first intended release is
 - Release workflow that validates distributions, publishes through PyPI Trusted Publishing, and creates a GitHub Release.
 
 ### Changed
+- Executable GitHub Actions dependencies are upgraded and pinned to immutable commit SHAs; Dependabot now proposes weekly GitHub Actions and Python development-tool updates.
+- GitHub Action summaries include lockfile locators so duplicate package instances are unambiguous.
 - Pull-request reviews now fetch and use the base branch trust snapshot, preventing candidate changes from redefining their own trusted baseline.
 - Same-version integrity removal is a critical trust-drift event, and same-version source appearance/disappearance is detected.
 - npm registry, URL, Git, local, link, and workspace sources are classified separately; registry-backed content inspection is limited to registry-to-registry version transitions.
