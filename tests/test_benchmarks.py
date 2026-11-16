@@ -12,6 +12,8 @@ def test_public_benchmark_suite_passes():
     assert summary["missed_controlled_security_cases"] == 0
 
     assert summary["benign_cases_with_high_signal_alerts"] == 0
+    assert summary["benign_lockfile_transition_cases"] == 2
+    assert summary["benign_package_release_transition_cases"] == 23
     assert summary["benign_passes"] == 25
     assert summary["benign_reviews"] == 0
     assert summary["benign_blocks"] == 0
