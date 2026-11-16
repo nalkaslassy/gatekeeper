@@ -59,6 +59,46 @@ def test_review_marks_medium_dependency_edge_drift_for_review(tmp_path):
     assert "required-dependency-added" in {e["rule"] for e in result["events"]}
 
 
+def test_review_passes_transitive_dependency_edge_churn_but_keeps_event(tmp_path):
+    (tmp_path / "package.json").write_text(json.dumps({
+        "dependencies": {"top": "1.0.0"}
+    }))
+    old_lock = {
+        "name": "demo",
+        "lockfileVersion": 3,
+        "packages": {
+            "": {"name": "demo"},
+            "node_modules/top": {
+                "version": "1.0.0",
+                "dependencies": {"parent": "1.0.0"},
+            },
+            "node_modules/parent": {
+                "version": "1.0.0",
+                "dependencies": {},
+            },
+        },
+    }
+    (tmp_path / "package-lock.json").write_text(json.dumps(old_lock))
+    write_trust_snapshot(tmp_path)
+
+    new_lock = json.loads(json.dumps(old_lock))
+    new_lock["packages"]["node_modules/parent"] = {
+        "version": "1.1.0",
+        "dependencies": {"child": "1.0.0"},
+    }
+    new_lock["packages"]["node_modules/child"] = {"version": "1.0.0"}
+    (tmp_path / "package-lock.json").write_text(json.dumps(new_lock))
+
+    result = review_repository(tmp_path)
+
+    assert result["decision"] == "pass"
+    event = next(
+        e for e in result["events"] if e["rule"] == "required-dependency-added"
+    )
+    assert event["severity"] == "info"
+    assert event["package"] == "parent"
+
+
 def test_review_blocks_high_trust_drift(fixture_repo):
     repo = fixture_repo("clean")
     write_trust_snapshot(repo)
