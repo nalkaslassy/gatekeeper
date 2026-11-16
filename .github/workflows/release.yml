@@ -21,6 +21,23 @@ jobs:
       - name: Install build tooling
         run: pip install build twine
 
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(python - <<'PY'
+          import tomllib
+          from pathlib import Path
+
+          data = tomllib.loads(Path("pyproject.toml").read_text())
+          print(data["project"]["version"])
+          PY
+          )"
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version $TAG_VERSION does not match pyproject version $PACKAGE_VERSION" >&2
+            exit 1
+          fi
+
       - name: Build sdist and wheel
         run: python -m build
 
