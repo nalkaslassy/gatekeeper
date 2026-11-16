@@ -56,4 +56,4 @@ After launch, prioritize evidence over feature count:
 - [ ] first public repository using the Action
 - [x] 25 benign benchmark transitions (2 compact public lockfile transitions + 23 package-level public release pairs)
 - [x] 10 historical incident reconstructions (including a retained documented miss)
-- [ ] publish a technical case study with both detections and misses
+- [x] publish a technical case study with both detections and misses (`docs/case-study-v0.1-evaluation.md`)
