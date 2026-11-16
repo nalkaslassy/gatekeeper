@@ -65,3 +65,18 @@ def test_dependabot_tracks_actions_and_python_dev_dependencies():
     )
     allowed = {item["dependency-name"] for item in pip_entry["allow"]}
     assert allowed == {"pytest", "build", "ruff", "bandit"}
+
+
+def test_sha_pins_keep_version_comments():
+    files = [
+        Path("action.yml"),
+        Path(".github/workflows/ci.yml"),
+        Path(".github/workflows/release.yml"),
+    ]
+    for path in files:
+        for line in path.read_text().splitlines():
+            if "uses:" not in line:
+                continue
+            assert " # " in line, (
+                f"{path}: pinned action is missing a human-readable version comment"
+            )
