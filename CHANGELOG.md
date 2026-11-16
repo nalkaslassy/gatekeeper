@@ -9,6 +9,7 @@ Gatekeeper release has been published yet; the first intended release is
 ## [Unreleased]
 
 ### Added
+- Networked end-to-end evaluation workflow that runs Gatekeeper over full commit-pinned public package-lock transitions from five external projects.
 - Expanded deterministic evaluation corpus: 25 benign transitions, 5 controlled security-drift cases, and 10 historical npm incidents, including a retained documented miss.
 - Evaluation methodology documentation and CI-uploaded benchmark JSON artifacts.
 - Unified `gatekeeper review` workflow that combines trust drift and optional npm content drift into one PASS / REVIEW / BLOCK decision.
