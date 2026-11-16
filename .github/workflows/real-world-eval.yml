@@ -1,0 +1,150 @@
+name: Real-world integration evaluation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "gatekeeper_cli/trust.py"
+      - "gatekeeper_cli/review.py"
+      - "gatekeeper_cli/content.py"
+      - "gatekeeper_cli/benchmarks/**"
+      - ".github/workflows/real-world-eval.yml"
+  pull_request:
+    paths:
+      - "gatekeeper_cli/trust.py"
+      - "gatekeeper_cli/review.py"
+      - "gatekeeper_cli/content.py"
+      - "gatekeeper_cli/benchmarks/**"
+      - ".github/workflows/real-world-eval.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    name: ${{ matrix.slug }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - slug: npm-cli-12.2.1-to-12.2.2
+            repository: npm/cli
+            baseline_ref: ae98c62586b6fea44114f72e249e246a2981de70
+            candidate_ref: 60e11343e61316d966c86805d803df5a0eb99230
+            expected_decision: pass
+          - slug: axios-1.20.0-to-1.21.0
+            repository: axios/axios
+            baseline_ref: 84a9f3b9a4f3244b8c8e818f557d64c7b964fb25
+            candidate_ref: aa54a5e1e0e50cd1a2561b854ae5490ff589d065
+            expected_decision: review
+          - slug: undici-8.12.2-to-8.12.3
+            repository: nodejs/undici
+            baseline_ref: bb6cc0ae9b6827ed273ed5ba344148273629638f
+            candidate_ref: ff9cc5e8556f488c045c884b4de367c5faed8522
+            expected_decision: review
+          - slug: cookie-2.0.1-to-2.0.2
+            repository: jshttp/cookie
+            baseline_ref: 51c485421a95ee796de6d8dab53a5ade0a20db8a
+            candidate_ref: a437ef03993af559900010f62c294647589c29db
+            expected_decision: pass
+          - slug: commander-15.0.0-to-15.1.0
+            repository: tj/commander.js
+            baseline_ref: ba6d13ddb4243e5913367734f8c159089ffe7834
+            candidate_ref: a5a7dc084d4d2b7932e85ca049c5204e50a2c721
+            expected_decision: review
+
+    steps:
+      - name: Check out Gatekeeper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: gatekeeper-src
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Gatekeeper from this commit
+        run: python -m pip install -e ./gatekeeper-src
+
+      - name: Check out trusted release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.baseline_ref }}
+          path: target-old
+          persist-credentials: false
+
+      - name: Check out candidate release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.candidate_ref }}
+          path: target-new
+          persist-credentials: false
+
+      - name: Build trusted snapshot from old release
+        run: |
+          gatekeeper trust snapshot target-old --output "${RUNNER_TEMP}/gatekeeper-baseline.json"
+
+      - name: Review candidate release
+        id: review
+        shell: bash
+        run: |
+          set +e
+          gatekeeper review target-new \
+            --baseline "${RUNNER_TEMP}/gatekeeper-baseline.json" \
+            --format json > real-world-result.json
+          CODE=$?
+          set -e
+
+          if [ "$CODE" -eq 2 ]; then
+            cat real-world-result.json || true
+            echo "Gatekeeper could not complete the real-world evaluation." >&2
+            exit 2
+          fi
+
+          python - <<'PY'
+          import json
+          import os
+
+          with open("real-world-result.json") as fh:
+              result = json.load(fh)
+
+          print(json.dumps(result, indent=2))
+          decision = result["decision"]
+          print(f"decision={decision}", file=open(os.environ["GITHUB_OUTPUT"], "a"))
+
+          expected = os.environ["EXPECTED_DECISION"]
+          if decision != expected:
+              raise SystemExit(
+                  f"decision changed: expected {expected}, observed {decision}"
+              )
+
+          summary = result["summary"]
+          lines = [
+              f"## {os.environ['EVAL_SLUG']}: {decision.upper()}",
+              "",
+              f"- Repository: {os.environ['EVAL_REPOSITORY']}",
+              f"- Changed packages: {summary['packages_changed']}",
+              f"- Added packages: {summary['packages_added']}",
+              f"- Removed packages: {summary['packages_removed']}",
+              f"- Risk events: {summary['risk_events']}",
+          ]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write("\n".join(lines) + "\n")
+          PY
+        env:
+          EVAL_SLUG: ${{ matrix.slug }}
+          EVAL_REPOSITORY: ${{ matrix.repository }}
+          EXPECTED_DECISION: ${{ matrix.expected_decision }}
+
+      - name: Upload evaluation result
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-world-${{ matrix.slug }}
+          path: real-world-result.json
+          if-no-files-found: error

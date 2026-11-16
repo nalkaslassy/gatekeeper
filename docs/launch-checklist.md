@@ -17,6 +17,7 @@ new product features.
 - [x] executable GitHub Actions dependencies pinned to immutable commit SHAs
 - [x] Dependabot monitors GitHub Actions and Python development tooling weekly
 - [x] Action summaries show lockfile locators for duplicate package instances
+- [x] separate end-to-end workflow validates the CLI against full commit-pinned public lockfile transitions
 
 ## One-time external setup
 

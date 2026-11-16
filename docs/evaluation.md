@@ -75,6 +75,33 @@ A security tool that detects incidents but reviews every ordinary upgrade is not
 useful. Conversely, a tool that always passes is quiet but not useful. Gatekeeper
 needs evidence on both dimensions.
 
+## Networked end-to-end evaluation
+
+A separate `.github/workflows/real-world-eval.yml` workflow validates the actual
+CLI against full `package-lock.json` graphs from public projects. It is kept
+separate from deterministic CI because it depends on GitHub/network availability.
+
+The initial matrix pins both the baseline and candidate releases to immutable
+commit SHAs for:
+
+- `npm/cli`;
+- `axios/axios`;
+- `nodejs/undici`;
+- `jshttp/cookie`;
+- `tj/commander.js`.
+
+For each matrix entry the workflow:
+
+1. checks out the old release;
+2. runs `gatekeeper trust snapshot` to create the trusted state;
+3. checks out the newer release independently;
+4. runs `gatekeeper review --baseline ... --format json`;
+5. uploads the complete JSON result.
+
+This evaluates the real CLI, parser, snapshot builder, duplicate-instance
+matching, and review decision over full public lockfiles without vendoring those
+large lockfiles into Gatekeeper.
+
 ## What the current corpus can support
 
 It can support statements such as:
