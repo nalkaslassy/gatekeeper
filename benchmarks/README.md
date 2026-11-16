@@ -1,67 +1,88 @@
 # Gatekeeper benchmark corpus
 
-This directory contains a deterministic benchmark for Gatekeeper's trust-drift
-engine. It is intended to make the project's security claims measurable and
-reproducible rather than anecdotal.
+This directory contains Gatekeeper's deterministic evaluation corpus. Its purpose
+is to make security and usability claims reproducible instead of anecdotal.
 
-## Corpus
-
-The initial corpus contains two benign public-repository dependency transitions:
-
-- `npm/cli`: `v12.2.0` -> `v12.2.1`
-- `axios/axios`: `v1.19.0` -> `v1.20.0`
-
-Those transitions were collected from the repositories' release-tag lockfiles on
-2026-10-30. The checked-in cases are deliberately compact reproductions: they
-retain only the records needed to exercise Gatekeeper's rules, while metadata
-records the full package/change counts observed when the public lockfiles were
-tested.
-
-Five controlled security-drift cases are derived from the `npm/cli v12.2.1`
-dependency state:
-
-1. same-version integrity mutation;
-2. newly introduced install script;
-3. registry-to-Git source change;
-4. new direct Git dependency; and
-5. large dependency-graph expansion.
-
-These are controlled mutations. They are **not** claims that npm/cli was
-compromised.
-
-## Run
+Run it locally with:
 
 ```bash
 python -m gatekeeper_cli.benchmarks.run
 ```
 
-The runner emits machine-readable JSON and exits nonzero if any expected result
-changes. CI runs the benchmark on every pull request.
+The runner emits JSON and exits nonzero if an expected case changes.
 
-## What the numbers mean
+## Current corpus
 
-The benchmark reports case-level precision and controlled-case recall. Those
-metrics apply only to this checked-in corpus. They are not estimates of
-Gatekeeper's performance against all real-world software supply-chain attacks.
+The corpus contains **40 cases**:
 
-## Historical incident reconstruction
+- **25 benign transitions**
+  - 2 compact reproductions of public repository lockfile transitions
+    (`npm/cli` and `axios/axios`);
+  - 23 minimal package-level models of verified public release pairs across
+    npm, Axios, Prettier, ESLint, Vite, Express, webpack, Zod, Fastify, and
+    Commander.
+- **5 controlled security-drift mutations** derived from public npm/cli data.
+- **10 historical npm supply-chain incidents** reconstructed from public
+  advisories and incident reports.
 
-The corpus now includes four reconstructed historical npm supply-chain incidents:
+The package-level benign cases are intentionally limited: they establish that an
+ordinary registry version change does not itself create a Gatekeeper alert. They
+are **not substitutes for full lockfile transitions** and are reported separately
+by the benchmark runner.
 
-| Incident | Gatekeeper result | Why |
+## Historical incident corpus
+
+| Incident | Expected Gatekeeper outcome | Primary modeled signal |
 |---|---|---|
-| `eslint-scope@3.7.2` (2018) | detected | malicious install script appeared |
-| `ua-parser-js@0.7.29` (2021) | detected | malicious install-time execution appeared |
-| `event-stream@3.3.6` (2018) | detected | existing package added a new required dependency edge to `flatmap-stream` |
-| `colors@1.4.1` (2022) | detected | static content drift identifies the newly introduced infinite-loop pattern |
+| `eslint-scope@3.7.2` | detected / BLOCK | install script appeared |
+| `ua-parser-js@0.7.29` | detected / BLOCK | install-time execution appeared |
+| `event-stream@3.3.6` | detected / REVIEW | required dependency edge to `flatmap-stream` |
+| `colors@1.4.1` | detected / BLOCK | new infinite-loop content pattern |
+| `coa@2.0.3` | detected / BLOCK | malicious preinstall appeared |
+| `rc@1.2.9` | detected / BLOCK | malicious install-time execution appeared |
+| `node-ipc@10.1.1` | detected / REVIEW | new network + filesystem-write capabilities |
+| `browserift@16.3.3` | detected / REVIEW | new package with malicious preinstall |
+| `common-array-token@1.0.0` | detected / REVIEW | new package with postinstall execution |
+| `data-value@45.0.0` | **documented miss / PASS** | malicious off-registry dependency-edge source is not currently modeled |
 
-The historical reconstructions are intentionally not tuned to a perfect score.
-They encode only facts supported by public incident documentation and only fields
-Gatekeeper currently understands. The initial four historical reconstructions are now detected by the combined metadata + static-content benchmark. This is still a tiny corpus and must not be generalized into a universal detection-rate claim.
+The historical corpus deliberately includes the `data-value` miss. The benchmark
+must document limitations rather than be tuned until every historical case is
+green.
 
-Evidence URLs for every reconstructed incident are stored with the benchmark case
-in `gatekeeper_cli/benchmarks/cases.py`.
+Evidence URLs and the exact reconstruction basis for every case live beside the
+case in `gatekeeper_cli/benchmarks/cases.py`.
 
-The next benchmark phase should add more historical incidents, pnpm and Yarn
-transitions, a larger benign corpus, and provenance-aware cases before making
-broader detection claims.
+## Metrics
+
+The runner reports:
+
+- benign PASS / REVIEW / BLOCK counts;
+- benign alert rate and block rate;
+- controlled-case detection;
+- historical incidents detected and missed;
+- historical PASS / REVIEW / BLOCK counts;
+- historical block rate;
+- corpus scope counts separating lockfile evidence from package-level release
+  sanity cases.
+
+A legacy `case_precision` field remains for compatibility. It is only a
+controlled-vs-benign corpus proxy and must **not** be described as population
+precision.
+
+## Interpretation limits
+
+This corpus cannot establish a universal detection rate or false-positive rate.
+In particular:
+
+- most benign cases are package-level release transitions, not complete
+  dependency graphs;
+- historical cases are compact reconstructions from public evidence rather than
+  archived compromised environments;
+- content fixtures encode documented capabilities without reproducing malicious
+  payloads verbatim;
+- Gatekeeper is static-first and will miss attack classes that do not change a
+  modeled trust field or introduce a detectable content capability.
+
+The next evaluation milestone is to increase **full public lockfile transitions**
+from 2 toward 25, then continue toward 50+, while growing the historical corpus
+from 10 toward 20 and retaining all misses.

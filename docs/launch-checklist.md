@@ -53,6 +53,6 @@ After launch, prioritize evidence over feature count:
 - [ ] 10 external installs/users
 - [ ] first independent issue or PR
 - [ ] first public repository using the Action
-- [ ] 25 benign upgrade benchmark transitions
-- [ ] 10 historical incident reconstructions
+- [x] 25 benign benchmark transitions (2 compact public lockfile transitions + 23 package-level public release pairs)
+- [x] 10 historical incident reconstructions (including a retained documented miss)
 - [ ] publish a technical case study with both detections and misses

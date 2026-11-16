@@ -60,6 +60,60 @@ def snapshot(packages: list[dict]) -> dict:
     }
 
 
+def _registry_source(package: str, version: str) -> str:
+    filename = package.rsplit("/", 1)[-1]
+    return f"https://registry.npmjs.org/{package}/-/{filename}-{version}.tgz"
+
+
+def benign_release_case(
+    *,
+    case_id: str,
+    repository: str,
+    package: str,
+    before: str,
+    after: str,
+    before_tag: str,
+    after_tag: str,
+) -> dict:
+    """Minimal package-level model of a verified public release transition.
+
+    These cases intentionally test ordinary registry version changes without
+    pretending to reproduce the repository's complete lockfile graph.
+    """
+    return {
+        "id": case_id,
+        "kind": "benign",
+        "source": {
+            "repository": repository,
+            "package": package,
+            "from": before_tag,
+            "to": after_tag,
+            "fixture_scope": "package-level-release-transition",
+            "evidence": [
+                f"https://github.com/{repository}/releases/tag/{before_tag}",
+                f"https://github.com/{repository}/releases/tag/{after_tag}",
+            ],
+        },
+        "baseline": snapshot([
+            pkg(
+                package,
+                before,
+                direct=True,
+                source=_registry_source(package, before),
+            ),
+        ]),
+        "current": snapshot([
+            pkg(
+                package,
+                after,
+                direct=True,
+                source=_registry_source(package, after),
+            ),
+        ]),
+        "expected_rules": [],
+    }
+
+
 # Real benign transitions -------------------------------------------------
 
 NPM_OLD = snapshot([
@@ -126,6 +180,14 @@ def _npm_control_base() -> tuple[dict, dict]:
 
 COLORS_140_SOURCE = "var colors = require('./colors');\nmodule['exports'] = colors;\nrequire('./extendStringPrototype')();\n"
 COLORS_141_SOURCE = "var colors = require('./colors');\nmodule['exports'] = colors;\nrequire('./extendStringPrototype')();\n\nlet am = require('../lib/custom/american');\nam();\nfor (let i = 666; i < Infinity; i++) {\n  if (i % 333) {\n  }\n  console.log('testing testing testing testing testing testing testing'.zalgo)\n}\n"
+
+NODE_IPC_1010_SOURCE = "module.exports = { ipc: true };\n"
+NODE_IPC_1011_SOURCE = """const https = require("https");
+const fs = require("fs");
+https.get("https://example.invalid/geolocation", () => {});
+fs.writeFile("./target.txt", "❤", () => {});
+module.exports = { ipc: true };
+"""
 
 
 def _historical_cases() -> list[dict]:
@@ -247,6 +309,147 @@ def _historical_cases() -> list[dict]:
             "expected_rules": ["content-infinite-loop"],
             "expected_detected": True,
         },
+        {
+            "id": "historical-coa-2.0.3",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "coa",
+                "before": "2.0.2",
+                "malicious": "2.0.3",
+                "incident_date": "2021-11-04",
+                "evidence": [
+                    "https://github.com/advisories/GHSA-73qr-pfmq-6rp8",
+                    "https://cert.europa.eu/publications/security-advisories/2021-062/",
+                ],
+                "basis": "Public incident reporting documents a new malicious preinstall hook in the hijacked coa releases.",
+            },
+            "baseline": snapshot([
+                pkg("coa", "2.0.2", direct=False, install_script=False),
+            ]),
+            "current": snapshot([
+                pkg("coa", "2.0.3", direct=False, install_script=True),
+            ]),
+            "expected_rules": ["install-script-added"],
+            "expected_detected": True,
+        },
+        {
+            "id": "historical-rc-1.2.9",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "rc",
+                "before": "1.2.8",
+                "malicious": "1.2.9",
+                "incident_date": "2021-11-04",
+                "evidence": [
+                    "https://github.com/advisories/GHSA-g2q5-5433-rhrf",
+                    "https://cert.europa.eu/publications/security-advisories/2021-062/",
+                ],
+                "basis": "The coordinated rc compromise used the same malicious install-time execution pattern documented for coa.",
+            },
+            "baseline": snapshot([
+                pkg("rc", "1.2.8", direct=False, install_script=False),
+            ]),
+            "current": snapshot([
+                pkg("rc", "1.2.9", direct=False, install_script=True),
+            ]),
+            "expected_rules": ["install-script-added"],
+            "expected_detected": True,
+        },
+        {
+            "id": "historical-node-ipc-10.1.1",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "node-ipc",
+                "before": "10.1.0",
+                "malicious": "10.1.1",
+                "incident_date": "2022-03-07",
+                "evidence": [
+                    "https://github.com/advisories/GHSA-97m3-w2cp-4xx6",
+                    "https://snyk.io/blog/peacenotwar-malicious-npm-node-ipc-package-vulnerability/",
+                ],
+                "basis": "The destructive release added outbound HTTPS and filesystem-write behavior; the compact content fixture models those documented capabilities, not the original source verbatim.",
+            },
+            "baseline": snapshot([
+                pkg("node-ipc", "10.1.0", direct=False),
+            ]),
+            "current": snapshot([
+                pkg("node-ipc", "10.1.1", direct=False),
+            ]),
+            "content_baseline": scan_content_files({
+                "node-ipc.cjs": NODE_IPC_1010_SOURCE,
+            }),
+            "content_current": scan_content_files({
+                "node-ipc.cjs": NODE_IPC_1011_SOURCE,
+            }),
+            "expected_rules": [
+                "content-filesystem-write",
+                "content-network-access",
+            ],
+            "expected_detected": True,
+        },
+        {
+            "id": "historical-browserift-16.3.3",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "browserift",
+                "malicious": "16.3.3",
+                "incident_date": "2020-09-02",
+                "evidence": [
+                    "https://github.com/advisories/GHSA-43vf-2x6g-p2m5",
+                ],
+                "basis": "The advisory identifies a malicious preinstall script. This fixture models first introduction of that package into a dependency graph.",
+            },
+            "baseline": snapshot([]),
+            "current": snapshot([
+                pkg("browserift", "16.3.3", direct=True, install_script=True),
+            ]),
+            "expected_rules": ["new-package-with-install-script"],
+            "expected_detected": True,
+        },
+        {
+            "id": "historical-common-array-token-1.0.0",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "common-array-token",
+                "malicious": "1.0.0",
+                "incident_date": "2026-08-29",
+                "evidence": [
+                    "https://github.com/advisories/GHSA-7x83-g5rh-27vr",
+                ],
+                "basis": "The advisory documents a postinstall hook that runs attacker-controlled dynamic code. This fixture models first introduction of the package.",
+            },
+            "baseline": snapshot([]),
+            "current": snapshot([
+                pkg("common-array-token", "1.0.0", direct=True, install_script=True),
+            ]),
+            "expected_rules": ["new-package-with-install-script"],
+            "expected_detected": True,
+        },
+        {
+            "id": "historical-data-value-45.0.0",
+            "kind": "historical-security-incident",
+            "source": {
+                "package": "data-value",
+                "malicious": "45.0.0",
+                "incident_date": "2026-08-29",
+                "evidence": [
+                    "https://github.com/advisories/GHSA-rv73-wgh6-57xc",
+                ],
+                "basis": "The malicious shape is an off-registry URL on a dependency edge. Gatekeeper records required edge names but not each edge's source spec, so this is a deliberate documented miss.",
+            },
+            "baseline": snapshot([]),
+            "current": snapshot([
+                pkg(
+                    "data-value",
+                    "45.0.0",
+                    direct=True,
+                    dependency_count=1,
+                    required_dependencies=["data-value"],
+                ),
+            ]),
+            "expected_rules": [],
+            "expected_detected": False,
+        },
     ]
 
 
@@ -257,6 +460,7 @@ def benchmark_cases() -> list[dict]:
             "kind": "benign",
             "source": {
                 "repository": "npm/cli",
+                "fixture_scope": "compact-public-lockfile-transition",
                 "from": "v12.2.0",
                 "to": "v12.2.1",
                 "observed_public_summary": {
@@ -275,6 +479,7 @@ def benchmark_cases() -> list[dict]:
             "kind": "benign",
             "source": {
                 "repository": "axios/axios",
+                "fixture_scope": "compact-public-lockfile-transition",
                 "from": "v1.19.0",
                 "to": "v1.20.0",
                 "observed_public_summary": {
@@ -291,6 +496,147 @@ def benchmark_cases() -> list[dict]:
             "expected_rules": [],
         },
     ]
+
+    cases.extend([
+        benign_release_case(
+            case_id="benign-npm-12.2.1-to-12.2.2",
+            repository="npm/cli", package="npm",
+            before="12.2.1", after="12.2.2",
+            before_tag="v12.2.1", after_tag="v12.2.2",
+        ),
+        benign_release_case(
+            case_id="benign-axios-1.20.0-to-1.21.0",
+            repository="axios/axios", package="axios",
+            before="1.20.0", after="1.21.0",
+            before_tag="v1.20.0", after_tag="v1.21.0",
+        ),
+        benign_release_case(
+            case_id="benign-axios-1.21.0-to-1.21.1",
+            repository="axios/axios", package="axios",
+            before="1.21.0", after="1.21.1",
+            before_tag="v1.21.0", after_tag="v1.21.1",
+        ),
+        benign_release_case(
+            case_id="benign-axios-0.34.0-to-0.35.0",
+            repository="axios/axios", package="axios",
+            before="0.34.0", after="0.35.0",
+            before_tag="v0.34.0", after_tag="v0.35.0",
+        ),
+        benign_release_case(
+            case_id="benign-prettier-3.9.8-to-3.9.9",
+            repository="prettier/prettier", package="prettier",
+            before="3.9.8", after="3.9.9",
+            before_tag="3.9.8", after_tag="3.9.9",
+        ),
+        benign_release_case(
+            case_id="benign-prettier-3.9.9-to-3.9.10",
+            repository="prettier/prettier", package="prettier",
+            before="3.9.9", after="3.9.10",
+            before_tag="3.9.9", after_tag="3.9.10",
+        ),
+        benign_release_case(
+            case_id="benign-prettier-3.10.0-to-3.10.1",
+            repository="prettier/prettier", package="prettier",
+            before="3.10.0", after="3.10.1",
+            before_tag="3.10.0", after_tag="3.10.1",
+        ),
+        benign_release_case(
+            case_id="benign-prettier-3.9.10-to-3.10.0",
+            repository="prettier/prettier", package="prettier",
+            before="3.9.10", after="3.10.0",
+            before_tag="3.9.10", after_tag="3.10.0",
+        ),
+        benign_release_case(
+            case_id="benign-eslint-10.11.0-to-10.12.0",
+            repository="eslint/eslint", package="eslint",
+            before="10.11.0", after="10.12.0",
+            before_tag="v10.11.0", after_tag="v10.12.0",
+        ),
+        benign_release_case(
+            case_id="benign-eslint-10.12.0-to-10.13.0",
+            repository="eslint/eslint", package="eslint",
+            before="10.12.0", after="10.13.0",
+            before_tag="v10.12.0", after_tag="v10.13.0",
+        ),
+        benign_release_case(
+            case_id="benign-eslint-10.13.0-to-10.14.0",
+            repository="eslint/eslint", package="eslint",
+            before="10.13.0", after="10.14.0",
+            before_tag="v10.13.0", after_tag="v10.14.0",
+        ),
+        benign_release_case(
+            case_id="benign-eslint-10.14.0-to-10.15.0",
+            repository="eslint/eslint", package="eslint",
+            before="10.14.0", after="10.15.0",
+            before_tag="v10.14.0", after_tag="v10.15.0",
+        ),
+        benign_release_case(
+            case_id="benign-vite-8.2.5-to-8.2.6",
+            repository="vitejs/vite", package="vite",
+            before="8.2.5", after="8.2.6",
+            before_tag="v8.2.5", after_tag="v8.2.6",
+        ),
+        benign_release_case(
+            case_id="benign-vite-8.3.7-to-8.3.8",
+            repository="vitejs/vite", package="vite",
+            before="8.3.7", after="8.3.8",
+            before_tag="v8.3.7", after_tag="v8.3.8",
+        ),
+        benign_release_case(
+            case_id="benign-express-5.2.0-to-5.2.1",
+            repository="expressjs/express", package="express",
+            before="5.2.0", after="5.2.1",
+            before_tag="v5.2.0", after_tag="v5.2.1",
+        ),
+        benign_release_case(
+            case_id="benign-express-5.2.1-to-5.3.0",
+            repository="expressjs/express", package="express",
+            before="5.2.1", after="5.3.0",
+            before_tag="v5.2.1", after_tag="v5.3.0",
+        ),
+        benign_release_case(
+            case_id="benign-webpack-5.111.0-to-5.111.1",
+            repository="webpack/webpack", package="webpack",
+            before="5.111.0", after="5.111.1",
+            before_tag="v5.111.0", after_tag="v5.111.1",
+        ),
+        benign_release_case(
+            case_id="benign-webpack-5.112.0-to-5.112.1",
+            repository="webpack/webpack", package="webpack",
+            before="5.112.0", after="5.112.1",
+            before_tag="v5.112.0", after_tag="v5.112.1",
+        ),
+        benign_release_case(
+            case_id="benign-webpack-5.112.1-to-5.112.2",
+            repository="webpack/webpack", package="webpack",
+            before="5.112.1", after="5.112.2",
+            before_tag="v5.112.1", after_tag="v5.112.2",
+        ),
+        benign_release_case(
+            case_id="benign-zod-4.6.3-to-4.6.4",
+            repository="colinhacks/zod", package="zod",
+            before="4.6.3", after="4.6.4",
+            before_tag="v4.6.3", after_tag="v4.6.4",
+        ),
+        benign_release_case(
+            case_id="benign-zod-4.6.4-to-4.6.5",
+            repository="colinhacks/zod", package="zod",
+            before="4.6.4", after="4.6.5",
+            before_tag="v4.6.4", after_tag="v4.6.5",
+        ),
+        benign_release_case(
+            case_id="benign-fastify-5.12.6-to-5.12.7",
+            repository="fastify/fastify", package="fastify",
+            before="5.12.6", after="5.12.7",
+            before_tag="v5.12.6", after_tag="v5.12.7",
+        ),
+        benign_release_case(
+            case_id="benign-commander-15.0.0-to-15.1.0",
+            repository="tj/commander.js", package="commander",
+            before="15.0.0", after="15.1.0",
+            before_tag="v15.0.0", after_tag="v15.1.0",
+        ),
+    ])
 
     before, after = _npm_control_base()
     after["packages"][0]["integrity"] = "sha512-CONTROLLED-MUTATION"

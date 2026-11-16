@@ -9,6 +9,8 @@ Gatekeeper release has been published yet; the first intended release is
 ## [Unreleased]
 
 ### Added
+- Expanded deterministic evaluation corpus: 25 benign transitions, 5 controlled security-drift cases, and 10 historical npm incidents, including a retained documented miss.
+- Evaluation methodology documentation and CI-uploaded benchmark JSON artifacts.
 - Unified `gatekeeper review` workflow that combines trust drift and optional npm content drift into one PASS / REVIEW / BLOCK decision.
 - Root GitHub Action focused on dependency trust review and GitHub job summaries.
 - Opt-in `gatekeeper inspect npm` registry workflow that verifies modern integrity, safely parses tarballs in memory, and runs static content drift without installing or executing package code.
@@ -22,6 +24,7 @@ Gatekeeper release has been published yet; the first intended release is
 - Release workflow that validates distributions, publishes through PyPI Trusted Publishing, and creates a GitHub Release.
 
 ### Changed
+- Benchmark output now reports PASS / REVIEW / BLOCK decision distributions, benign alert/block rates, historical detection/block rates, and separates full lockfile evidence from package-level release sanity cases.
 - Executable GitHub Actions dependencies are upgraded and pinned to immutable commit SHAs; Dependabot now proposes weekly GitHub Actions and Python development-tool updates.
 - GitHub Action summaries include lockfile locators so duplicate package instances are unambiguous.
 - Pull-request reviews now fetch and use the base branch trust snapshot, preventing candidate changes from redefining their own trusted baseline.
