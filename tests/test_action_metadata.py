@@ -80,3 +80,10 @@ def test_sha_pins_keep_version_comments():
             assert " # " in line, (
                 f"{path}: pinned action is missing a human-readable version comment"
             )
+
+
+def test_ci_persists_benchmark_evidence():
+    ci = Path(".github/workflows/ci.yml").read_text()
+    assert "benchmark-results.json" in ci
+    assert "gatekeeper-benchmark-results" in ci
+    assert "if-no-files-found: error" in ci
