@@ -184,15 +184,23 @@ When a committed snapshot exists, the normal `gatekeeper scan` command runs the
 `trust_drift` analyzer automatically and emits these events as standard findings,
 so the existing policy threshold can block the PR.
 
-Gatekeeper also ships a deterministic benchmark corpus under `benchmarks/`.
-It currently includes two benign public-release dependency transitions, five
-controlled security-drift mutations, and four reconstructed historical npm
-supply-chain incidents. Run `python -m gatekeeper_cli.benchmarks.run` to reproduce
-the case-level results locally; CI runs the same corpus on every pull request.
-The historical set currently detects all 4 reconstructed incidents using the combined
-metadata and static-content benchmark. This remains a small corpus and is not a universal detection-rate claim. Reported
-precision/recall values apply only to the checked-in corpus and are not claims
-about all software supply-chain attacks.
+Gatekeeper also ships a deterministic evaluation corpus under `benchmarks/`.
+It currently contains **25 benign transitions, 5 controlled security-drift
+mutations, and 10 reconstructed historical npm incidents**. The benign evidence
+is intentionally separated into **2 compact public lockfile transitions** and
+**23 minimal package-level public release pairs**; those 23 sanity cases are not
+presented as full dependency-graph evaluations.
+
+The current historical corpus surfaces 9 of 10 reconstructed incidents and
+retains one deliberate documented miss (`data-value@45.0.0`) where the malicious
+signal lives in an off-registry dependency-edge source Gatekeeper does not yet
+model. Historical outcomes include BLOCK, REVIEW, and PASS rather than tuning
+every incident to a block.
+
+Run `python -m gatekeeper_cli.benchmarks.run` to reproduce the case-level
+results. CI runs the corpus on every pull request and uploads the JSON result as
+an artifact. See `docs/evaluation.md` for methodology and claim limits. These
+fixed-corpus numbers are **not** universal detection or false-positive rates.
 
 ## Supply-chain coverage
 
