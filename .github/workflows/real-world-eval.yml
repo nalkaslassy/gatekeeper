@@ -38,12 +38,12 @@ jobs:
             repository: axios/axios
             baseline_ref: 84a9f3b9a4f3244b8c8e818f557d64c7b964fb25
             candidate_ref: aa54a5e1e0e50cd1a2561b854ae5490ff589d065
-            expected_decision: review
+            expected_decision: pass
           - slug: undici-8.12.2-to-8.12.3
             repository: nodejs/undici
             baseline_ref: bb6cc0ae9b6827ed273ed5ba344148273629638f
             candidate_ref: ff9cc5e8556f488c045c884b4de367c5faed8522
-            expected_decision: review
+            expected_decision: pass
           - slug: cookie-2.0.1-to-2.0.2
             repository: jshttp/cookie
             baseline_ref: 51c485421a95ee796de6d8dab53a5ade0a20db8a
@@ -53,7 +53,7 @@ jobs:
             repository: tj/commander.js
             baseline_ref: ba6d13ddb4243e5913367734f8c159089ffe7834
             candidate_ref: a5a7dc084d4d2b7932e85ca049c5204e50a2c721
-            expected_decision: review
+            expected_decision: pass
 
     steps:
       - name: Check out Gatekeeper
